@@ -80,7 +80,7 @@ function CountryPicker({ onBack }: { onBack: () => void }) {
   const navigate = useNavigate();
   const initGame = useGame((s) => s.initGame);
   const [countries, setCountries] = useState<{ id: string; name: string; gdpT: number }[]>([]);
-  const [hover, setHover] = useState<{ id: string; name: string; gdpT: number } | null>(null);
+
 
   return (
     <div className="relative z-10 flex min-h-screen flex-col">
