@@ -95,28 +95,16 @@ function CountryPicker({ onBack }: { onBack: () => void }) {
       <div className="flex-1 relative">
         <WorldMap
           onCountriesLoaded={setCountries}
-          fillFor={(id) => (hover?.id === id ? "oklch(0.82 0.16 85)" : "oklch(0.55 0.04 80)")}
+          fillFor={() => "oklch(0.55 0.04 80)"}
           onCountryClick={(c) => {
             if (countries.length === 0) return;
             initGame(c.id, c.name, countries);
             setTimeout(() => navigate({ to: "/play" }), 50);
           }}
         />
-        <div
-          className="absolute inset-0 pointer-events-none"
-          onMouseMove={() => {}}
-        />
       </div>
-
-      {hover && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-md bg-card/90 px-4 py-2 text-sm backdrop-blur border border-border">
-          <span className="font-semibold">{hover.name}</span>
-          <span className="ml-3 text-muted-foreground">${hover.gdpT.toFixed(2)}T · {(hover.gdpT * 100).toFixed(0)}/s</span>
-        </div>
-      )}
-      {/* suppress unused */}
-      {void setHover}
     </div>
   );
 }
+
 
