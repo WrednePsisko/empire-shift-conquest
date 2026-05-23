@@ -79,9 +79,8 @@ function Lobby() {
 function CountryPicker({ onBack }: { onBack: () => void }) {
   const navigate = useNavigate();
   const initGame = useGame((s) => s.initGame);
-  const [hover, setHover] = useState<{ id: string; name: string; gdpT: number } | null>(null);
-  const allCountriesRef = useState<{ id: string; name: string; gdpT: number }[]>([])[0];
   const [countries, setCountries] = useState<{ id: string; name: string; gdpT: number }[]>([]);
+  const [hover, setHover] = useState<{ id: string; name: string; gdpT: number } | null>(null);
 
   return (
     <div className="relative z-10 flex min-h-screen flex-col">
@@ -96,11 +95,16 @@ function CountryPicker({ onBack }: { onBack: () => void }) {
       <div className="flex-1 relative">
         <WorldMap
           onCountriesLoaded={setCountries}
-          fillFor={() => "oklch(0.55 0.04 80)"}
+          fillFor={(id) => (hover?.id === id ? "oklch(0.82 0.16 85)" : "oklch(0.55 0.04 80)")}
           onCountryClick={(c) => {
-            initGame(c.id, c.name, countries.length ? countries : [c]);
-            setTimeout(() => navigate({ to: "/play" }), 100);
+            if (countries.length === 0) return;
+            initGame(c.id, c.name, countries);
+            setTimeout(() => navigate({ to: "/play" }), 50);
           }}
+        />
+        <div
+          className="absolute inset-0 pointer-events-none"
+          onMouseMove={() => {}}
         />
       </div>
 
@@ -110,7 +114,9 @@ function CountryPicker({ onBack }: { onBack: () => void }) {
           <span className="ml-3 text-muted-foreground">${hover.gdpT.toFixed(2)}T · {(hover.gdpT * 100).toFixed(0)}/s</span>
         </div>
       )}
-      {void allCountriesRef}
+      {/* suppress unused */}
+      {void setHover}
     </div>
   );
 }
+
