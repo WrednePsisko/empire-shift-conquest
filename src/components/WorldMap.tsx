@@ -12,10 +12,20 @@ export interface MapCountry {
 }
 
 export interface MapMarker {
-  id: string; // country id
-  label: string; // text shown (e.g. army count)
+  id: string;
+  label: string;
   color: string;
-  icon?: string; // single character / emoji
+  icon?: string;
+}
+
+export interface MapMovement {
+  id: string;
+  fromId: string;
+  toId: string;
+  startMs: number;
+  durationMs: number;
+  color: string;
+  label?: string;
 }
 
 export interface MapViewTarget {
@@ -34,13 +44,14 @@ interface Props {
   height?: number;
   showLabels?: boolean;
   markers?: MapMarker[];
+  movements?: MapMovement[];
   focusOn?: MapViewTarget | null;
-  interactive?: boolean; // enable pan/zoom
+  interactive?: boolean;
 }
 
 const TOPO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 const MIN_SCALE = 1;
-const MAX_SCALE = 20;
+const MAX_SCALE = 24;
 
 export function WorldMap({
   onCountryClick,
@@ -53,6 +64,7 @@ export function WorldMap({
   height = 500,
   showLabels = false,
   markers,
+  movements,
   focusOn,
   interactive = true,
 }: Props) {
@@ -60,8 +72,10 @@ export function WorldMap({
   const loadedRef = useRef(false);
   const [view, setView] = useState({ k: 1, tx: 0, ty: 0 });
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const dragRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
+  const dragRef = useRef<{ x: number; y: number; tx: number; ty: number; pointerId: number } | null>(null);
   const movedRef = useRef(false);
+  // Re-render tick for animations (movements)
+  const [, setAnimTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,7 +114,19 @@ export function WorldMap({
     return m;
   }, [features]);
 
-  // Auto-focus on a country
+  // rAF for movement animations
+  useEffect(() => {
+    if (!movements || movements.length === 0) return;
+    let raf = 0;
+    const loop = () => {
+      setAnimTick((t) => (t + 1) % 1_000_000);
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [movements]);
+
+  // Auto-focus
   useEffect(() => {
     if (!focusOn || !featuresById.size) return;
     const f = featuresById.get(focusOn.countryId);
@@ -108,19 +134,14 @@ export function WorldMap({
     const [cx, cy] = path.centroid(f);
     if (!isFinite(cx)) return;
     const k = Math.max(MIN_SCALE, Math.min(MAX_SCALE, focusOn.scale ?? 4));
-    setView({
-      k,
-      tx: width / 2 - cx * k,
-      ty: height / 2 - cy * k,
-    });
+    setView({ k, tx: width / 2 - cx * k, ty: height / 2 - cy * k });
   }, [focusOn, featuresById, path, width, height]);
 
   const clampView = useCallback(
     (v: { k: number; tx: number; ty: number }) => {
       const k = Math.max(MIN_SCALE, Math.min(MAX_SCALE, v.k));
-      // keep map mostly in view
-      const maxTx = width * (k - 1) / 2 + width * 0.4;
-      const maxTy = height * (k - 1) / 2 + height * 0.4;
+      const maxTx = (width * (k - 1)) / 2 + width * 0.4;
+      const maxTy = (height * (k - 1)) / 2 + height * 0.4;
       return {
         k,
         tx: Math.max(-maxTx, Math.min(maxTx, v.tx)),
@@ -130,31 +151,7 @@ export function WorldMap({
     [width, height],
   );
 
-  const handleWheel = useCallback(
-    (e: React.WheelEvent<SVGSVGElement>) => {
-      if (!interactive) return;
-      e.preventDefault();
-      const svg = svgRef.current;
-      if (!svg) return;
-      const rect = svg.getBoundingClientRect();
-      // mouse position in viewBox coords
-      const mx = ((e.clientX - rect.left) / rect.width) * width;
-      const my = ((e.clientY - rect.top) / rect.height) * height;
-      const factor = Math.exp(-e.deltaY * 0.0015);
-      setView((v) => {
-        const k = Math.max(MIN_SCALE, Math.min(MAX_SCALE, v.k * factor));
-        const ratio = k / v.k;
-        return clampView({
-          k,
-          tx: mx - (mx - v.tx) * ratio,
-          ty: my - (my - v.ty) * ratio,
-        });
-      });
-    },
-    [interactive, width, height, clampView],
-  );
-
-  // Attach non-passive wheel handler so preventDefault works
+  // Non-passive wheel zoom
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg || !interactive) return;
@@ -167,35 +164,77 @@ export function WorldMap({
       setView((v) => {
         const k = Math.max(MIN_SCALE, Math.min(MAX_SCALE, v.k * factor));
         const ratio = k / v.k;
-        return clampView({
-          k,
-          tx: mx - (mx - v.tx) * ratio,
-          ty: my - (my - v.ty) * ratio,
-        });
+        return clampView({ k, tx: mx - (mx - v.tx) * ratio, ty: my - (my - v.ty) * ratio });
       });
     };
     svg.addEventListener("wheel", fn, { passive: false });
     return () => svg.removeEventListener("wheel", fn);
   }, [interactive, width, height, clampView]);
 
-  const onMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+  // Pointer (touch + mouse) pan + pinch zoom
+  const pinchRef = useRef<{ d: number; cx: number; cy: number; k: number; tx: number; ty: number } | null>(null);
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+
+  const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     if (!interactive) return;
-    dragRef.current = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty };
-    movedRef.current = false;
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointersRef.current.size === 1) {
+      dragRef.current = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty, pointerId: e.pointerId };
+      movedRef.current = false;
+    } else if (pointersRef.current.size === 2) {
+      const pts = Array.from(pointersRef.current.values());
+      const dx = pts[0].x - pts[1].x;
+      const dy = pts[0].y - pts[1].y;
+      pinchRef.current = {
+        d: Math.hypot(dx, dy),
+        cx: (pts[0].x + pts[1].x) / 2,
+        cy: (pts[0].y + pts[1].y) / 2,
+        k: view.k,
+        tx: view.tx,
+        ty: view.ty,
+      };
+      dragRef.current = null;
+    }
   };
-  const onMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    const d = dragRef.current;
-    if (!d) return;
+
+  const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!pointersRef.current.has(e.pointerId)) return;
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const svg = svgRef.current;
     if (!svg) return;
     const rect = svg.getBoundingClientRect();
+    if (pointersRef.current.size === 2 && pinchRef.current) {
+      const pts = Array.from(pointersRef.current.values());
+      const dx = pts[0].x - pts[1].x;
+      const dy = pts[0].y - pts[1].y;
+      const d = Math.hypot(dx, dy);
+      const factor = d / pinchRef.current.d;
+      const newK = Math.max(MIN_SCALE, Math.min(MAX_SCALE, pinchRef.current.k * factor));
+      const mx = ((pinchRef.current.cx - rect.left) / rect.width) * width;
+      const my = ((pinchRef.current.cy - rect.top) / rect.height) * height;
+      const ratio = newK / pinchRef.current.k;
+      setView(
+        clampView({
+          k: newK,
+          tx: mx - (mx - pinchRef.current.tx) * ratio,
+          ty: my - (my - pinchRef.current.ty) * ratio,
+        }),
+      );
+      return;
+    }
+    const d = dragRef.current;
+    if (!d) return;
     const dx = ((e.clientX - d.x) / rect.width) * width;
     const dy = ((e.clientY - d.y) / rect.height) * height;
     if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 4) movedRef.current = true;
     setView((v) => clampView({ k: v.k, tx: d.tx + dx, ty: d.ty + dy }));
   };
-  const endDrag = () => {
-    dragRef.current = null;
+
+  const onPointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
+    pointersRef.current.delete(e.pointerId);
+    if (pointersRef.current.size < 2) pinchRef.current = null;
+    if (pointersRef.current.size === 0) dragRef.current = null;
   };
 
   const zoomBy = (factor: number) => {
@@ -209,56 +248,78 @@ export function WorldMap({
   };
 
   const reset = () => setView({ k: 1, tx: 0, ty: 0 });
-
   const labelScale = 1 / view.k;
+  const now = Date.now();
 
   return (
     <div className="relative w-full h-full">
       <svg
         ref={svgRef}
         viewBox={`0 0 ${width} ${height}`}
-        className={`w-full h-full block select-none ${dragRef.current ? "cursor-grabbing" : interactive ? "cursor-grab" : ""}`}
-        onWheel={handleWheel}
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
-        onMouseUp={endDrag}
-        onMouseLeave={endDrag}
+        className={`w-full h-full block select-none touch-none ${dragRef.current ? "cursor-grabbing" : interactive ? "cursor-grab" : ""}`}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
       >
         <defs>
-          <radialGradient id="ocean" cx="50%" cy="50%" r="75%">
-            <stop offset="0%" stopColor="oklch(0.28 0.05 240)" />
-            <stop offset="100%" stopColor="oklch(0.14 0.04 250)" />
+          <radialGradient id="ocean" cx="50%" cy="55%" r="80%">
+            <stop offset="0%" stopColor="#0e2a4a" />
+            <stop offset="55%" stopColor="#0a1d36" />
+            <stop offset="100%" stopColor="#06101f" />
           </radialGradient>
+          <filter id="landShadow" x="-10%" y="-10%" width="120%" height="120%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="0.6" />
+            <feOffset dx="0" dy="0.5" result="off" />
+            <feComponentTransfer><feFuncA type="linear" slope="0.5" /></feComponentTransfer>
+            <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <radialGradient id="markerGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#fff" stopOpacity="0.45" />
+            <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+          </radialGradient>
+          <pattern id="oceanGrid" width="24" height="24" patternUnits="userSpaceOnUse">
+            <path d="M24 0H0V24" fill="none" stroke="#1a3556" strokeOpacity="0.18" strokeWidth="0.4" />
+          </pattern>
         </defs>
         <rect width={width} height={height} fill="url(#ocean)" />
+        <rect width={width} height={height} fill="url(#oceanGrid)" />
         <g transform={`translate(${view.tx} ${view.ty}) scale(${view.k})`}>
-          <path d={path({ type: "Sphere" } as never) ?? ""} fill="none" stroke="oklch(0.4 0.05 240 / 0.3)" strokeWidth={1 / view.k} />
-          {features?.map((f) => {
-            const id = String(Number(f.id));
-            const d = path(f) ?? "";
-            const fill = fillFor?.(id) ?? "oklch(0.6 0.02 80)";
-            const stroke = strokeFor?.(id) ?? "oklch(0.1 0 0 / 0.4)";
-            const isSel = selectedId === id;
-            const isHi = highlightId === id;
-            return (
-              <path
-                key={id}
-                d={d}
-                fill={fill}
-                stroke={isSel ? "#fbbf24" : isHi ? "#ffffff" : stroke}
-                strokeWidth={(isSel ? 1.8 : isHi ? 1.4 : 0.4) / view.k}
-                className="transition-[fill] duration-150 hover:brightness-125"
-                style={{ cursor: onCountryClick ? "pointer" : "inherit" }}
-                onClick={(e) => {
-                  if (movedRef.current) return;
-                  e.stopPropagation();
-                  onCountryClick?.({ id, name: f.properties.name, gdpT: getGdp(id) });
-                }}
-              >
-                <title>{f.properties.name}</title>
-              </path>
-            );
-          })}
+          <path
+            d={path({ type: "Sphere" } as never) ?? ""}
+            fill="none"
+            stroke="#5b7fb3"
+            strokeOpacity={0.25}
+            strokeWidth={1 / view.k}
+          />
+          <g filter="url(#landShadow)">
+            {features?.map((f) => {
+              const id = String(Number(f.id));
+              const d = path(f) ?? "";
+              const fill = fillFor?.(id) ?? "#3d4a3a";
+              const stroke = strokeFor?.(id) ?? "rgba(8,12,20,0.55)";
+              const isSel = selectedId === id;
+              const isHi = highlightId === id;
+              return (
+                <path
+                  key={id}
+                  d={d}
+                  fill={fill}
+                  stroke={isSel ? "#fbbf24" : isHi ? "#ffffff" : stroke}
+                  strokeWidth={(isSel ? 1.8 : isHi ? 1.4 : 0.5) / view.k}
+                  className="transition-[fill] duration-150 hover:brightness-125"
+                  style={{ cursor: onCountryClick ? "pointer" : "inherit" }}
+                  onClick={(e) => {
+                    if (movedRef.current) return;
+                    e.stopPropagation();
+                    onCountryClick?.({ id, name: f.properties.name, gdpT: getGdp(id) });
+                  }}
+                >
+                  <title>{f.properties.name}</title>
+                </path>
+              );
+            })}
+          </g>
           {showLabels && features?.map((f) => {
             const id = String(Number(f.id));
             const c = path.centroid(f);
@@ -271,13 +332,15 @@ export function WorldMap({
                 fontSize={6 * labelScale}
                 textAnchor="middle"
                 fill="#fff"
-                opacity={0.5}
+                opacity={0.55}
                 pointerEvents="none"
+                style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.6)", strokeWidth: 1.2 * labelScale }}
               >
                 {f.properties.name}
               </text>
             );
           })}
+          {/* Static army garrison markers */}
           {markers?.map((m) => {
             const f = featuresById.get(m.id);
             if (!f) return null;
@@ -286,13 +349,8 @@ export function WorldMap({
             const r = 7 * labelScale;
             return (
               <g key={`m-${m.id}`} transform={`translate(${c[0]} ${c[1]})`} pointerEvents="none">
-                <circle
-                  r={r}
-                  fill={m.color}
-                  stroke="#0a0a0a"
-                  strokeWidth={1.2 * labelScale}
-                  opacity={0.95}
-                />
+                <circle r={r * 1.6} fill="url(#markerGlow)" />
+                <circle r={r} fill={m.color} stroke="#0a0a0a" strokeWidth={1.2 * labelScale} opacity={0.95} />
                 <text
                   y={r * 0.4}
                   textAnchor="middle"
@@ -304,15 +362,56 @@ export function WorldMap({
                   {m.label}
                 </text>
                 {m.icon && (
-                  <text
-                    y={-r * 0.4}
-                    textAnchor="middle"
-                    fontSize={6 * labelScale}
-                    fill="#0a0a0a"
-                  >
+                  <text y={-r * 0.4} textAnchor="middle" fontSize={6 * labelScale} fill="#0a0a0a">
                     {m.icon}
                   </text>
                 )}
+              </g>
+            );
+          })}
+          {/* Animated troop movements */}
+          {movements?.map((mv) => {
+            const a = featuresById.get(mv.fromId);
+            const b = featuresById.get(mv.toId);
+            if (!a || !b) return null;
+            const ca = path.centroid(a);
+            const cb = path.centroid(b);
+            if (!isFinite(ca[0]) || !isFinite(cb[0])) return null;
+            const t = Math.min(1, Math.max(0, (now - mv.startMs) / mv.durationMs));
+            // Arc the path slightly
+            const mx = (ca[0] + cb[0]) / 2;
+            const my = (ca[1] + cb[1]) / 2 - Math.hypot(cb[0] - ca[0], cb[1] - ca[1]) * 0.18;
+            const x = (1 - t) * (1 - t) * ca[0] + 2 * (1 - t) * t * mx + t * t * cb[0];
+            const y = (1 - t) * (1 - t) * ca[1] + 2 * (1 - t) * t * my + t * t * cb[1];
+            const dx = 2 * (1 - t) * (mx - ca[0]) + 2 * t * (cb[0] - mx);
+            const dy = 2 * (1 - t) * (my - ca[1]) + 2 * t * (cb[1] - my);
+            const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+            const r = 9 * labelScale;
+            const arcPath = `M ${ca[0]} ${ca[1]} Q ${mx} ${my} ${cb[0]} ${cb[1]}`;
+            return (
+              <g key={`mv-${mv.id}`} pointerEvents="none">
+                <path
+                  d={arcPath}
+                  fill="none"
+                  stroke={mv.color}
+                  strokeOpacity={0.55}
+                  strokeWidth={1.4 * labelScale}
+                  strokeDasharray={`${3 * labelScale} ${3 * labelScale}`}
+                />
+                <g transform={`translate(${x} ${y}) rotate(${angle})`}>
+                  <circle r={r * 1.6} fill={mv.color} opacity={0.25} />
+                  <circle r={r} fill={mv.color} stroke="#0a0a0a" strokeWidth={1.4 * labelScale} />
+                  <text
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontSize={r * 1.2}
+                    transform={`rotate(${-angle})`}
+                    fill="#0a0a0a"
+                    fontWeight={700}
+                  >
+                    ⚔
+                  </text>
+                </g>
               </g>
             );
           })}
@@ -324,7 +423,7 @@ export function WorldMap({
           <button
             type="button"
             onClick={() => zoomBy(1.4)}
-            className="size-9 rounded-md bg-card/90 border border-border text-foreground hover:bg-accent text-lg font-bold backdrop-blur"
+            className="size-10 rounded-md bg-card/90 border border-border text-foreground hover:bg-accent text-xl font-bold backdrop-blur shadow-lg"
             aria-label="Zoom in"
           >
             +
@@ -332,7 +431,7 @@ export function WorldMap({
           <button
             type="button"
             onClick={() => zoomBy(1 / 1.4)}
-            className="size-9 rounded-md bg-card/90 border border-border text-foreground hover:bg-accent text-lg font-bold backdrop-blur"
+            className="size-10 rounded-md bg-card/90 border border-border text-foreground hover:bg-accent text-xl font-bold backdrop-blur shadow-lg"
             aria-label="Zoom out"
           >
             −
@@ -340,7 +439,7 @@ export function WorldMap({
           <button
             type="button"
             onClick={reset}
-            className="size-9 rounded-md bg-card/90 border border-border text-foreground hover:bg-accent text-xs backdrop-blur"
+            className="size-10 rounded-md bg-card/90 border border-border text-foreground hover:bg-accent text-sm backdrop-blur shadow-lg"
             aria-label="Reset view"
           >
             ⤢
