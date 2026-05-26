@@ -78,6 +78,8 @@ export interface GameState {
   log: string[];
   // relations[a][b] -- symmetric
   relations: Record<string, Record<string, Relation>>;
+  // opinions[a][b] -- symmetric, -100..100
+  opinions: Record<string, Record<string, number>>;
   movements: Movement[];
 
   initGame: (playerCountryId: string, playerCountryName: string, allCountries: { id: string; name: string; gdpT: number }[]) => void;
@@ -90,11 +92,14 @@ export interface GameState {
   // diplomacy
   getRelation: (a: string, b: string) => Relation;
   setRelation: (a: string, b: string, r: Relation) => void;
+  getOpinion: (a: string, b: string) => number;
+  adjustOpinion: (a: string, b: string, delta: number) => void;
   proposeAlliance: (targetEmpireId: string) => { accepted: boolean; reason: string };
   breakAlliance: (targetEmpireId: string) => void;
   declareWar: (targetEmpireId: string) => void;
   makePeace: (targetEmpireId: string) => void;
 }
+
 
 const EMPIRE_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#84cc16", "#22c55e",
