@@ -251,7 +251,21 @@ function Play() {
             movements={mapMovements}
             focusOn={focus}
             onCountryClick={(c) => handleCountryClick(c.id)}
+            onMarkerClick={(id) => handleCountryClick(id)}
           />
+
+          {/* Army-selected hint banner */}
+          {selectionOwned && !target && unitTotal(selected!.units) > 0 && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+              <div className="rounded-full border border-primary/60 bg-card/90 backdrop-blur px-3 py-1.5 shadow-lg flex items-center gap-2 text-xs font-medium">
+                <Swords className="size-3.5 text-primary" />
+                <span className="truncate max-w-[60vw]">
+                  Army in <span className="font-bold">{selected!.name}</span> selected — tap a country to deploy
+                </span>
+              </div>
+            </div>
+          )}
+
 
           {/* Selected country panel */}
           {selected && panel === "selected" && (
