@@ -338,22 +338,26 @@ function Play() {
                       </div>
                     </div>
                   ))}
-                  <p className="pt-1 text-[11px] text-muted-foreground">Tap an enemy country to invade.</p>
+                  <p className="pt-1 text-[11px] text-muted-foreground">Tap any country to deploy troops (attack enemies, reinforce your own).</p>
                 </div>
               )}
 
-              {selectionOwned && target && (
+              {selectionOwned && target && (() => {
+                const isReinforce = target.ownerId === playerEmpireId;
+                return (
                 <div className="mt-3 border-t border-border pt-2">
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Invading</div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
+                    {isReinforce ? "Reinforcing" : "Invading"}
+                  </div>
                   <div className="flex items-center justify-between mb-2">
                     <div className="font-semibold flex items-center gap-2 min-w-0">
                       <span className="inline-block size-3 rounded-sm shrink-0" style={{ background: empires[target.ownerId]?.color }} />
                       <span className="truncate">{target.name}</span>
                     </div>
-                    <div className="text-xs">Power <span className="font-mono">{unitPower(target.units)}</span></div>
+                    <div className="text-xs">{isReinforce ? "Garrison" : "Power"} <span className="font-mono">{isReinforce ? unitTotal(target.units) : unitPower(target.units)}</span></div>
                   </div>
                   <div className="text-[11px] text-muted-foreground mb-1">
-                    Deploy {Math.round(sendFraction * 100)}% of garrison
+                    Deploy {Math.round(sendFraction * 100)}% of garrison from {selected.name}
                   </div>
                   <input
                     type="range"
@@ -374,10 +378,15 @@ function Play() {
                   </div>
                   <div className="flex gap-2 mt-2">
                     <Button variant="ghost" className="flex-1 h-10" onClick={() => setTargetId(null)}>Cancel</Button>
-                    <Button className="flex-1 h-10" variant="destructive" onClick={launchAttack}>
-                      <Swords className="size-4 mr-1.5" /> Launch
+                    <Button
+                      className="flex-1 h-10"
+                      variant={isReinforce ? "default" : "destructive"}
+                      onClick={launchAttack}
+                    >
+                      <Swords className="size-4 mr-1.5" /> {isReinforce ? "Send" : "Attack"}
                     </Button>
                   </div>
+
                 </div>
               )}
             </div>
