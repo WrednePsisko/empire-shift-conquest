@@ -42,6 +42,7 @@ function Play() {
   const speed = useGame((s) => s.speed);
   const setSpeed = useGame((s) => s.setSpeed);
   const relations = useGame((s) => s.relations);
+  const opinions = useGame((s) => s.opinions);
   const movements = useGame((s) => s.movements);
   const proposeAlliance = useGame((s) => s.proposeAlliance);
   const breakAlliance = useGame((s) => s.breakAlliance);
@@ -53,6 +54,8 @@ function Play() {
   const [sendFraction, setSendFraction] = useState(0.75);
   const [focus, setFocus] = useState<MapViewTarget | null>(null);
   const [panel, setPanel] = useState<"selected" | "diplomacy" | "log" | null>("selected");
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+
 
   useEffect(() => {
     if (!initialized) {
