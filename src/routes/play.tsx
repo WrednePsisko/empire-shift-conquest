@@ -400,9 +400,10 @@ function Play() {
                   </div>
                 </div>
               )}
-
-
+                </>
+              )}
             </div>
+
           )}
 
           {/* Diplomacy panel */}
