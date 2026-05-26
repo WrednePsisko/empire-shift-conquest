@@ -388,7 +388,9 @@ function Play() {
                   </div>
 
                 </div>
-              )}
+                );
+              })()}
+
             </div>
           )}
 
