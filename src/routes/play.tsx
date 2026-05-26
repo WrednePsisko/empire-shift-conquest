@@ -42,6 +42,7 @@ function Play() {
   const speed = useGame((s) => s.speed);
   const setSpeed = useGame((s) => s.setSpeed);
   const relations = useGame((s) => s.relations);
+  const opinions = useGame((s) => s.opinions);
   const movements = useGame((s) => s.movements);
   const proposeAlliance = useGame((s) => s.proposeAlliance);
   const breakAlliance = useGame((s) => s.breakAlliance);
@@ -53,6 +54,8 @@ function Play() {
   const [sendFraction, setSendFraction] = useState(0.75);
   const [focus, setFocus] = useState<MapViewTarget | null>(null);
   const [panel, setPanel] = useState<"selected" | "diplomacy" | "log" | null>("selected");
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+
 
   useEffect(() => {
     if (!initialized) {
@@ -269,15 +272,18 @@ function Play() {
 
           {/* Selected country panel */}
           {selected && panel === "selected" && (
-            <div className="absolute bottom-3 left-3 right-3 md:right-auto md:w-[440px] rounded-xl border border-border bg-card/95 backdrop-blur-xl p-3 shadow-2xl max-h-[60dvh] overflow-y-auto">
+            <div className={`absolute bottom-3 left-3 right-3 md:right-auto md:w-[440px] rounded-xl border border-border bg-card/95 backdrop-blur-xl p-3 shadow-2xl overflow-y-auto ${panelCollapsed ? "max-h-[88px]" : "max-h-[48dvh]"}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Selected</div>
-                  <div className="text-base font-bold flex items-center gap-2">
+                  <div className="text-base font-bold flex items-center gap-2 flex-wrap">
                     <span className="inline-block size-3 rounded-sm shrink-0" style={{ background: empires[selected.ownerId]?.color }} />
                     <span className="truncate">{selected.name}</span>
                     {!selectionOwned && (
-                      <RelationBadge relation={relWithTarget} />
+                      <>
+                        <RelationBadge relation={relWithTarget} />
+                        <OpinionBadge score={opinions[playerEmpireId!]?.[selected.ownerId] ?? 0} />
+                      </>
                     )}
                   </div>
                   <div className="text-[11px] text-muted-foreground truncate">
@@ -285,8 +291,8 @@ function Play() {
                   </div>
                 </div>
                 <div className="flex gap-1 shrink-0">
-                  <Button size="sm" variant="outline" className="h-8 px-2" onClick={() => setFocus({ countryId: selected.id, scale: 6 })}>
-                    Focus
+                  <Button size="sm" variant="outline" className="h-8 px-2" onClick={() => setPanelCollapsed((v) => !v)}>
+                    {panelCollapsed ? "Expand" : "Collapse"}
                   </Button>
                   <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setSelectedId(null); setTargetId(null); }}>
                     <X className="size-4" />
@@ -294,17 +300,20 @@ function Play() {
                 </div>
               </div>
 
-              <div className="mt-2 grid grid-cols-6 gap-1 text-center text-xs">
-                {UNIT_TYPES.map((t) => (
-                  <div key={t} className="rounded-md border border-border/60 bg-background/40 p-1.5">
-                    <div className="text-base leading-none">{UNIT_STATS[t].icon}</div>
-                    <div className="font-mono font-semibold text-xs">{selected.units[t]}</div>
+              {!panelCollapsed && (
+                <>
+                  <div className="mt-2 grid grid-cols-6 gap-1 text-center text-xs">
+                    {UNIT_TYPES.map((t) => (
+                      <div key={t} className="rounded-md border border-border/60 bg-background/40 p-1.5">
+                        <div className="text-base leading-none">{UNIT_STATS[t].icon}</div>
+                        <div className="font-mono font-semibold text-xs">{selected.units[t]}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <div className="text-center text-[10px] text-muted-foreground mt-1">
-                Total power <span className="font-mono text-foreground">{unitPower(selected.units)}</span>
-              </div>
+                  <div className="text-center text-[10px] text-muted-foreground mt-1">
+                    Total power <span className="font-mono text-foreground">{unitPower(selected.units)}</span>
+                  </div>
+
 
               {selectionOwned && !target && (
                 <div className="mt-3 border-t border-border pt-2 space-y-1.5">
@@ -391,9 +400,10 @@ function Play() {
                   </div>
                 </div>
               )}
-
-
+                </>
+              )}
             </div>
+
           )}
 
           {/* Diplomacy panel */}
@@ -412,6 +422,7 @@ function Play() {
                   .filter((r) => !r.empire.isPlayer)
                   .map((r) => {
                     const rel = relations[playerEmpireId!]?.[r.empire.id] ?? "neutral";
+                    const op = opinions[playerEmpireId!]?.[r.empire.id] ?? 0;
                     return (
                       <div key={r.empire.id} className="flex items-center gap-2 rounded-md border border-border/60 bg-background/40 p-2">
                         <span className="inline-block size-3 rounded-sm shrink-0" style={{ background: r.empire.color }} />
@@ -421,7 +432,9 @@ function Play() {
                             {r.count} territories · ${r.gdp.toFixed(1)}T · ⚔{r.armies}
                           </div>
                         </div>
+                        <OpinionBadge score={op} small />
                         <RelationBadge relation={rel} />
+
                         <div className="flex gap-1">
                           {rel === "neutral" && (
                             <>
@@ -539,3 +552,23 @@ function RelationBadge({ relation, small = false }: { relation: "war" | "neutral
     </span>
   );
 }
+
+function OpinionBadge({ score, small = false }: { score: number; small?: boolean }) {
+  const s = Math.round(score);
+  const styles =
+    s >= 25
+      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+      : s <= -25
+      ? "bg-red-500/20 text-red-300 border-red-500/40"
+      : "bg-muted text-muted-foreground border-border";
+  const sign = s > 0 ? "+" : "";
+  return (
+    <span
+      className={`inline-flex items-center rounded-md border px-1.5 font-mono font-semibold tabular-nums ${small ? "text-[9px] py-0" : "text-[10px] py-0.5"} ${styles}`}
+      title="Opinion (-100 hostile · 0 neutral · +100 friendly)"
+    >
+      {sign}{s}
+    </span>
+  );
+}
+
