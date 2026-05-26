@@ -137,7 +137,9 @@ export const useGame = create<GameState>()(
       speed: 1,
       log: [],
       relations: {},
+      opinions: {},
       movements: [],
+
 
       initGame: (playerCountryId, playerCountryName, allCountries) => {
         const countries: Record<string, Country> = {};
@@ -190,7 +192,9 @@ export const useGame = create<GameState>()(
           startMs: Date.now(),
           speed: 1,
           relations: {},
+          opinions: {},
           movements: [],
+
           log: [`${playerCountryName} rises. Your empire begins.`],
         });
       },
@@ -207,8 +211,10 @@ export const useGame = create<GameState>()(
           speed: 1,
           log: [],
           relations: {},
+          opinions: {},
           movements: [],
         }),
+
 
       setSpeed: (speed) => set({ speed }),
 
