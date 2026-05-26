@@ -235,6 +235,23 @@ export const useGame = create<GameState>()(
         });
       },
 
+      getOpinion: (a, b) => {
+        if (a === b) return 100;
+        return get().opinions[a]?.[b] ?? 0;
+      },
+
+      adjustOpinion: (a, b, delta) => {
+        if (a === b || delta === 0) return;
+        set((s) => {
+          const cur = s.opinions[a]?.[b] ?? 0;
+          const next = Math.max(-100, Math.min(100, cur + delta));
+          const op = { ...s.opinions };
+          op[a] = { ...(op[a] ?? {}), [b]: next };
+          op[b] = { ...(op[b] ?? {}), [a]: next };
+          return { opinions: op };
+        });
+      },
+
       proposeAlliance: (targetEmpireId) => {
         const s = get();
         const playerId = s.playerEmpireId!;
@@ -243,7 +260,7 @@ export const useGame = create<GameState>()(
         if (cur === "ally") return { accepted: false, reason: "Already allied." };
         if (cur === "war") return { accepted: false, reason: "End the war first." };
 
-        // Acceptance odds: based on relative power
+        // Acceptance odds: based on relative power + opinion
         const player = s.empires[playerId];
         const target = s.empires[targetEmpireId];
         if (!target) return { accepted: false, reason: "No such empire." };
@@ -252,13 +269,15 @@ export const useGame = create<GameState>()(
         const targetPower =
           Object.values(s.countries).filter((c) => c.ownerId === targetEmpireId).reduce((a, c) => a + unitPower(c.units) + c.gdpT * 50, 0);
         const ratio = playerPower / Math.max(1, targetPower);
-        // strong empires more likely to be accepted as allies
-        const accept = Math.random() < Math.min(0.9, 0.25 + ratio * 0.35);
+        const opinion = s.opinions[playerId]?.[targetEmpireId] ?? 0;
+        const accept = Math.random() < Math.min(0.95, 0.2 + ratio * 0.3 + opinion / 150);
         if (accept) {
           get().setRelation(playerId, targetEmpireId, "ally");
+          get().adjustOpinion(playerId, targetEmpireId, 30);
           get().pushLog(`🤝 ${target.name} accepted an alliance with ${player.name}.`);
           return { accepted: true, reason: "Alliance signed." };
         }
+        get().adjustOpinion(playerId, targetEmpireId, -5);
         get().pushLog(`✋ ${target.name} declined the alliance proposal.`);
         return { accepted: false, reason: `${target.name} declined.` };
       },
@@ -267,6 +286,7 @@ export const useGame = create<GameState>()(
         const s = get();
         const playerId = s.playerEmpireId!;
         get().setRelation(playerId, targetEmpireId, "neutral");
+        get().adjustOpinion(playerId, targetEmpireId, -25);
         get().pushLog(`💔 Alliance with ${s.empires[targetEmpireId]?.name} dissolved.`);
       },
 
@@ -274,15 +294,25 @@ export const useGame = create<GameState>()(
         const s = get();
         const playerId = s.playerEmpireId!;
         get().setRelation(playerId, targetEmpireId, "war");
+        get().adjustOpinion(playerId, targetEmpireId, -50);
         get().pushLog(`⚔️ You declared war on ${s.empires[targetEmpireId]?.name}!`);
       },
 
       makePeace: (targetEmpireId) => {
         const s = get();
         const playerId = s.playerEmpireId!;
-        // 60% chance enemy accepts peace
-        if (Math.random() < 0.6) {
+        const opinion = s.opinions[playerId]?.[targetEmpireId] ?? 0;
+        const chance = Math.max(0.2, Math.min(0.9, 0.5 + opinion / 200));
+        if (Math.random() < chance) {
           get().setRelation(playerId, targetEmpireId, "neutral");
+          get().adjustOpinion(playerId, targetEmpireId, 15);
+          get().pushLog(`🕊 Peace agreed with ${s.empires[targetEmpireId]?.name}.`);
+        } else {
+          get().adjustOpinion(playerId, targetEmpireId, -5);
+          get().pushLog(`${s.empires[targetEmpireId]?.name} refuses peace.`);
+        }
+      },
+
           get().pushLog(`🕊 Peace agreed with ${s.empires[targetEmpireId]?.name}.`);
         } else {
           get().pushLog(`${s.empires[targetEmpireId]?.name} refuses peace.`);
