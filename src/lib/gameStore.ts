@@ -507,7 +507,7 @@ export const useGame = create<GameState>()(
       },
     }),
     {
-      name: "empire-shift-save-v3",
+      name: "empire-shift-save-v4",
       partialize: (s) => ({
         initialized: s.initialized,
         countries: s.countries,
@@ -519,8 +519,10 @@ export const useGame = create<GameState>()(
         speed: s.speed,
         log: s.log,
         relations: s.relations,
+        opinions: s.opinions,
         movements: s.movements,
       }),
+
     },
   ),
 );
