@@ -313,11 +313,7 @@ export const useGame = create<GameState>()(
         }
       },
 
-          get().pushLog(`🕊 Peace agreed with ${s.empires[targetEmpireId]?.name}.`);
-        } else {
-          get().pushLog(`${s.empires[targetEmpireId]?.name} refuses peace.`);
-        }
-      },
+
 
       buyUnits: (countryId, type, qty) => {
         if (qty <= 0) return;
