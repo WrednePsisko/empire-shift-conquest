@@ -342,19 +342,22 @@ function Play() {
                 </div>
               )}
 
-              {selectionOwned && target && (() => {
-                const isReinforce = target.ownerId === playerEmpireId;
-                return (
+              {selectionOwned && target && (
                 <div className="mt-3 border-t border-border pt-2">
                   <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
-                    {isReinforce ? "Reinforcing" : "Invading"}
+                    {target.ownerId === playerEmpireId ? "Reinforcing" : "Invading"}
                   </div>
                   <div className="flex items-center justify-between mb-2">
                     <div className="font-semibold flex items-center gap-2 min-w-0">
                       <span className="inline-block size-3 rounded-sm shrink-0" style={{ background: empires[target.ownerId]?.color }} />
                       <span className="truncate">{target.name}</span>
                     </div>
-                    <div className="text-xs">{isReinforce ? "Garrison" : "Power"} <span className="font-mono">{isReinforce ? unitTotal(target.units) : unitPower(target.units)}</span></div>
+                    <div className="text-xs">
+                      {target.ownerId === playerEmpireId ? "Garrison" : "Power"}{" "}
+                      <span className="font-mono">
+                        {target.ownerId === playerEmpireId ? unitTotal(target.units) : unitPower(target.units)}
+                      </span>
+                    </div>
                   </div>
                   <div className="text-[11px] text-muted-foreground mb-1">
                     Deploy {Math.round(sendFraction * 100)}% of garrison from {selected.name}
@@ -380,16 +383,15 @@ function Play() {
                     <Button variant="ghost" className="flex-1 h-10" onClick={() => setTargetId(null)}>Cancel</Button>
                     <Button
                       className="flex-1 h-10"
-                      variant={isReinforce ? "default" : "destructive"}
+                      variant={target.ownerId === playerEmpireId ? "default" : "destructive"}
                       onClick={launchAttack}
                     >
-                      <Swords className="size-4 mr-1.5" /> {isReinforce ? "Send" : "Attack"}
+                      <Swords className="size-4 mr-1.5" /> {target.ownerId === playerEmpireId ? "Send" : "Attack"}
                     </Button>
                   </div>
-
                 </div>
-                );
-              })()}
+              )}
+
 
             </div>
           )}
