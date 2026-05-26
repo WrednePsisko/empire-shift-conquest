@@ -422,6 +422,7 @@ function Play() {
                   .filter((r) => !r.empire.isPlayer)
                   .map((r) => {
                     const rel = relations[playerEmpireId!]?.[r.empire.id] ?? "neutral";
+                    const op = opinions[playerEmpireId!]?.[r.empire.id] ?? 0;
                     return (
                       <div key={r.empire.id} className="flex items-center gap-2 rounded-md border border-border/60 bg-background/40 p-2">
                         <span className="inline-block size-3 rounded-sm shrink-0" style={{ background: r.empire.color }} />
@@ -431,7 +432,9 @@ function Play() {
                             {r.count} territories · ${r.gdp.toFixed(1)}T · ⚔{r.armies}
                           </div>
                         </div>
+                        <OpinionBadge score={op} small />
                         <RelationBadge relation={rel} />
+
                         <div className="flex gap-1">
                           {rel === "neutral" && (
                             <>
