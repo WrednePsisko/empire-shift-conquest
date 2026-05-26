@@ -549,3 +549,23 @@ function RelationBadge({ relation, small = false }: { relation: "war" | "neutral
     </span>
   );
 }
+
+function OpinionBadge({ score, small = false }: { score: number; small?: boolean }) {
+  const s = Math.round(score);
+  const styles =
+    s >= 25
+      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+      : s <= -25
+      ? "bg-red-500/20 text-red-300 border-red-500/40"
+      : "bg-muted text-muted-foreground border-border";
+  const sign = s > 0 ? "+" : "";
+  return (
+    <span
+      className={`inline-flex items-center rounded-md border px-1.5 font-mono font-semibold tabular-nums ${small ? "text-[9px] py-0" : "text-[10px] py-0.5"} ${styles}`}
+      title="Opinion (-100 hostile · 0 neutral · +100 friendly)"
+    >
+      {sign}{s}
+    </span>
+  );
+}
+
