@@ -357,7 +357,9 @@ export const useGame = create<GameState>()(
           if (pairKey(s, attackerEmpire.id, defenderEmpire.id) !== "war") {
             get().setRelation(attackerEmpire.id, defenderEmpire.id, "war");
           }
+          get().adjustOpinion(attackerEmpire.id, defenderEmpire.id, -30);
         }
+
 
 
         const movement: Movement = {
