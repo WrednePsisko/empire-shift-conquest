@@ -16,7 +16,10 @@ export interface MapMarker {
   label: string;
   color: string;
   icon?: string;
+  selectable?: boolean;
+  selected?: boolean;
 }
+
 
 export interface MapMovement {
   id: string;
@@ -35,6 +38,7 @@ export interface MapViewTarget {
 
 interface Props {
   onCountryClick?: (c: MapCountry) => void;
+  onMarkerClick?: (id: string) => void;
   fillFor?: (id: string) => string | undefined;
   strokeFor?: (id: string) => string | undefined;
   selectedId?: string | null;
@@ -49,12 +53,14 @@ interface Props {
   interactive?: boolean;
 }
 
+
 const TOPO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 const MIN_SCALE = 1;
 const MAX_SCALE = 24;
 
 export function WorldMap({
   onCountryClick,
+  onMarkerClick,
   fillFor,
   strokeFor,
   selectedId,
@@ -68,6 +74,7 @@ export function WorldMap({
   focusOn,
   interactive = true,
 }: Props) {
+
   const [features, setFeatures] = useState<Feature<Geometry, { name: string }>[] | null>(null);
   const loadedRef = useRef(false);
   const [view, setView] = useState({ k: 1, tx: 0, ty: 0 });
