@@ -16,7 +16,10 @@ export interface MapMarker {
   label: string;
   color: string;
   icon?: string;
+  selectable?: boolean;
+  selected?: boolean;
 }
+
 
 export interface MapMovement {
   id: string;
@@ -35,6 +38,7 @@ export interface MapViewTarget {
 
 interface Props {
   onCountryClick?: (c: MapCountry) => void;
+  onMarkerClick?: (id: string) => void;
   fillFor?: (id: string) => string | undefined;
   strokeFor?: (id: string) => string | undefined;
   selectedId?: string | null;
@@ -49,12 +53,14 @@ interface Props {
   interactive?: boolean;
 }
 
+
 const TOPO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 const MIN_SCALE = 1;
 const MAX_SCALE = 24;
 
 export function WorldMap({
   onCountryClick,
+  onMarkerClick,
   fillFor,
   strokeFor,
   selectedId,
@@ -68,6 +74,7 @@ export function WorldMap({
   focusOn,
   interactive = true,
 }: Props) {
+
   const [features, setFeatures] = useState<Feature<Geometry, { name: string }>[] | null>(null);
   const loadedRef = useRef(false);
   const [view, setView] = useState({ k: 1, tx: 0, ty: 0 });
@@ -347,8 +354,41 @@ export function WorldMap({
             const c = path.centroid(f);
             if (!isFinite(c[0])) return null;
             const r = 7 * labelScale;
+            const clickable = m.selectable && !!onMarkerClick;
             return (
-              <g key={`m-${m.id}`} transform={`translate(${c[0]} ${c[1]})`} pointerEvents="none">
+              <g
+                key={`m-${m.id}`}
+                transform={`translate(${c[0]} ${c[1]})`}
+                pointerEvents={clickable ? "auto" : "none"}
+                style={clickable ? { cursor: "pointer" } : undefined}
+                onPointerDown={clickable ? (e) => e.stopPropagation() : undefined}
+                onClick={
+                  clickable
+                    ? (e) => {
+                        if (movedRef.current) return;
+                        e.stopPropagation();
+                        onMarkerClick?.(m.id);
+                      }
+                    : undefined
+                }
+              >
+                {/* Larger invisible hit target for fingers */}
+                {clickable && <circle r={r * 3} fill="transparent" />}
+                {m.selected && (
+                  <>
+                    <circle
+                      r={r * 2.2}
+                      fill="none"
+                      stroke="#fbbf24"
+                      strokeWidth={1.8 * labelScale}
+                      opacity={0.9}
+                    >
+                      <animate attributeName="r" values={`${r * 1.8};${r * 2.6};${r * 1.8}`} dur="1.4s" repeatCount="indefinite" />
+                      <animate attributeName="opacity" values="0.9;0.3;0.9" dur="1.4s" repeatCount="indefinite" />
+                    </circle>
+                    <circle r={r * 1.5} fill="none" stroke="#fbbf24" strokeWidth={1.4 * labelScale} />
+                  </>
+                )}
                 <circle r={r * 1.6} fill="url(#markerGlow)" />
                 <circle r={r} fill={m.color} stroke="#0a0a0a" strokeWidth={1.2 * labelScale} opacity={0.95} />
                 <text
@@ -369,6 +409,7 @@ export function WorldMap({
               </g>
             );
           })}
+
           {/* Animated troop movements */}
           {movements?.map((mv) => {
             const a = featuresById.get(mv.fromId);
