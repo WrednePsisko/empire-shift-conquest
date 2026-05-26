@@ -117,15 +117,19 @@ function Play() {
         const score = c.units[t] * UNIT_STATS[t].power;
         if (score > best) { best = score; dominant = t; }
       }
+      const isOwn = c.ownerId === playerEmpireId;
       arr.push({
         id: c.id,
         label: total >= 1000 ? `${Math.floor(total / 1000)}k` : String(total),
         color: empire.color,
         icon: UNIT_STATS[dominant].icon,
+        selectable: isOwn,
+        selected: isOwn && selectedId === c.id,
       });
     }
     return arr;
-  }, [countries, empires]);
+  }, [countries, empires, playerEmpireId, selectedId]);
+
 
   const mapMovements: MapMovement[] = useMemo(
     () =>
@@ -149,25 +153,32 @@ function Play() {
     const country = countries[id];
     if (!country) return;
     setPanel("selected");
-    if (!selectedId) {
-      setSelectedId(id);
-      setTargetId(null);
-    } else if (selectedId === id) {
+    const sel = selectedId ? countries[selectedId] : null;
+    // If we already have one of our armies selected and tapped a different country: send troops
+    if (sel && sel.id !== id && sel.ownerId === playerEmpireId) {
+      if (country.ownerId === playerEmpireId) {
+        // Reinforce own country
+        setTargetId(id);
+        return;
+      }
+      const r = relations[playerEmpireId!]?.[country.ownerId] ?? "neutral";
+      if (r === "ally") {
+        // Switch selection to ally country (can't attack)
+        setSelectedId(id);
+        setTargetId(null);
+        return;
+      }
+      setTargetId(id);
+      return;
+    }
+    // Toggle off if tapping same selection
+    if (selectedId === id) {
       setSelectedId(null);
       setTargetId(null);
-    } else {
-      const sel = countries[selectedId];
-      if (sel && sel.ownerId === playerEmpireId && country.ownerId !== playerEmpireId) {
-        const r = relations[playerEmpireId!]?.[country.ownerId] ?? "neutral";
-        if (r === "ally") {
-          setSelectedId(id); setTargetId(null);
-        } else {
-          setTargetId(id);
-        }
-      } else {
-        setSelectedId(id); setTargetId(null);
-      }
+      return;
     }
+    setSelectedId(id);
+    setTargetId(null);
   };
 
   const launchAttack = () => {
@@ -178,6 +189,7 @@ function Play() {
     attack(selected.id, target.id, send);
     setTargetId(null);
   };
+
 
   return (
     <div className="min-h-[100dvh] w-full bg-background text-foreground flex flex-col">
