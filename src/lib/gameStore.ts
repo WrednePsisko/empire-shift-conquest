@@ -300,25 +300,28 @@ export const useGame = create<GameState>()(
         const s = get();
         const from = s.countries[fromId];
         const to = s.countries[toId];
-        if (!from || !to || from.ownerId === to.ownerId) return;
-        // alliance check
-        if (pairKey(s, from.ownerId, to.ownerId) === "ally") return;
+        if (!from || !to || fromId === toId) return;
+        const sameOwner = from.ownerId === to.ownerId;
+        // alliance check only matters for hostile movement
+        if (!sameOwner && pairKey(s, from.ownerId, to.ownerId) === "ally") return;
         const total = unitTotal(sent);
         if (total < 1) return;
         for (const t of UNIT_TYPES) if (sent[t] > from.units[t]) return;
+
 
         // Deduct sent units from source immediately (they're en route)
         const fromRemaining: Units = { ...emptyUnits() };
         for (const t of UNIT_TYPES) fromRemaining[t] = from.units[t] - sent[t];
 
-        // If attacker was at peace, this declares war
+        // If attacker was at peace, this declares war (only on hostile moves)
         const attackerEmpire = s.empires[from.ownerId];
         const defenderEmpire = s.empires[to.ownerId];
-        if (attackerEmpire && defenderEmpire) {
+        if (!sameOwner && attackerEmpire && defenderEmpire) {
           if (pairKey(s, attackerEmpire.id, defenderEmpire.id) !== "war") {
             get().setRelation(attackerEmpire.id, defenderEmpire.id, "war");
           }
         }
+
 
         const movement: Movement = {
           id: `m_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
