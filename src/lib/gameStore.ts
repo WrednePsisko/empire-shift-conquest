@@ -83,7 +83,7 @@ export interface GameState {
   opinions: Record<string, Record<string, number>>;
   movements: Movement[];
 
-  initGame: (playerCountryId: string, playerCountryName: string, allCountries: { id: string; name: string; gdpT: number }[]) => void;
+  initGame: (playerCountryId: string, playerCountryName: string, allCountries: { id: string; name: string; gdpT: number; centroid: [number, number] }[]) => void;
   resetGame: () => void;
   setSpeed: (s: number) => void;
   buyUnits: (countryId: string, type: UnitType, qty: number) => void;
@@ -174,6 +174,7 @@ export const useGame = create<GameState>()(
             gdpT: c.gdpT,
             ownerId: empireId,
             units: seedUnits(c.gdpT),
+            centroid: c.centroid,
           };
         }
 
