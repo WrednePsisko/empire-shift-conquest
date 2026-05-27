@@ -54,6 +54,7 @@ export interface Country {
   gdpT: number;
   ownerId: string;
   units: Units;
+  centroid: [number, number]; // [lon, lat]
 }
 
 export interface Movement {
