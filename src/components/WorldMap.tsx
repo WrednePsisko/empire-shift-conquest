@@ -57,7 +57,7 @@ interface Props {
 
 const TOPO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 const MIN_SCALE = 1;
-const MAX_SCALE = 24;
+const MAX_SCALE = 40;
 
 export function WorldMap({
   onCountryClick,
