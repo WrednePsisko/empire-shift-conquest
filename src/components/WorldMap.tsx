@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { geoNaturalEarth1, geoPath } from "d3-geo";
+import { geoNaturalEarth1, geoPath, geoCentroid } from "d3-geo";
 import { feature } from "topojson-client";
 import type { Topology } from "topojson-specification";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
@@ -105,7 +105,8 @@ export function WorldMap({
       loadedRef.current = true;
       const list: MapCountry[] = features.map((f) => {
         const id = String(Number(f.id));
-        return { id, name: f.properties.name, gdpT: getGdp(id) };
+        const c = geoCentroid(f) as [number, number];
+        return { id, name: f.properties.name, gdpT: getGdp(id), centroid: c };
       });
       onCountriesLoaded(list);
     }
