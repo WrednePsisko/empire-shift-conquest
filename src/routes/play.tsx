@@ -13,9 +13,12 @@ import {
   type Units,
 } from "@/lib/gameStore";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
   Coins, Crown, Shield, Swords, Home, Pause, Play as PlayIcon,
-  FastForward, Handshake, Flag, X, Calendar, Users,
+  FastForward, Handshake, Flag, X, Calendar, Users, Plus, Check,
 } from "lucide-react";
 
 export const Route = createFileRoute("/play")({
@@ -48,6 +51,8 @@ function Play() {
   const breakAlliance = useGame((s) => s.breakAlliance);
   const declareWar = useGame((s) => s.declareWar);
   const makePeace = useGame((s) => s.makePeace);
+  const pendingProposals = useGame((s) => s.pendingProposals);
+  const resolveProposal = useGame((s) => s.resolveProposal);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [targetId, setTargetId] = useState<string | null>(null);
