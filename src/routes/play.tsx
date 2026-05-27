@@ -522,9 +522,135 @@ function Play() {
           </div>
         </aside>
       </div>
+
+      {/* Proposal modal (auto-pauses game) */}
+      {pendingProposals.length > 0 && (() => {
+        const p = pendingProposals[0];
+        const from = empires[p.fromEmpireId];
+        if (!from) return null;
+        const op = opinions[playerEmpireId!]?.[p.fromEmpireId] ?? 0;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+            <div className="w-full max-w-sm rounded-2xl border-2 border-primary/60 bg-card shadow-2xl shadow-primary/20 overflow-hidden animate-in zoom-in-95">
+              <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 text-[10px] uppercase tracking-[0.3em] text-primary font-semibold flex items-center justify-between">
+                <span>Diplomatic Cable</span>
+                <span className="font-mono normal-case tracking-normal text-muted-foreground">Game paused</span>
+              </div>
+              <div className="p-5 text-center">
+                <div className="mx-auto mb-3 size-14 rounded-full flex items-center justify-center text-2xl border-2" style={{ borderColor: from.color, background: `${from.color}22` }}>
+                  {p.kind === "alliance" ? "🤝" : "🕊"}
+                </div>
+                <div className="text-xs text-muted-foreground uppercase tracking-widest">From</div>
+                <div className="text-xl font-bold mt-0.5 flex items-center justify-center gap-2 flex-wrap">
+                  <span className="inline-block size-3 rounded-sm" style={{ background: from.color }} />
+                  {from.name}
+                  <OpinionBadge score={op} small />
+                </div>
+                <p className="mt-3 text-sm text-foreground/90">
+                  {p.kind === "alliance"
+                    ? `${from.name} proposes a mutual alliance. Will you stand together?`
+                    : `${from.name} sues for peace. Will you accept their olive branch?`}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 p-3 pt-0">
+                <Button variant="outline" className="h-12" onClick={() => resolveProposal(p.id, false)}>
+                  <X className="size-4 mr-1.5" /> Reject
+                </Button>
+                <Button className="h-12" onClick={() => resolveProposal(p.id, true)}>
+                  <Check className="size-4 mr-1.5" /> Accept
+                </Button>
+              </div>
+              {pendingProposals.length > 1 && (
+                <div className="text-center text-[11px] text-muted-foreground pb-3">
+                  +{pendingProposals.length - 1} more pending
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
+
+function CustomBuyPopover({
+  max,
+  unitCost,
+  label,
+  icon,
+  onConfirm,
+}: {
+  max: number;
+  unitCost: number;
+  label: string;
+  icon: string;
+  onConfirm: (qty: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [qty, setQty] = useState(10);
+  useEffect(() => {
+    if (open) setQty(Math.min(10, Math.max(1, max)));
+  }, [open, max]);
+  const safeMax = Math.max(1, max);
+  const cost = qty * unitCost;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          size="sm"
+          variant="default"
+          className="px-1.5 h-7 min-w-[30px]"
+          disabled={max <= 0}
+          aria-label={`Buy custom amount of ${label}`}
+        >
+          <Plus className="size-3.5" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-3" align="end">
+        <div className="text-xs font-semibold mb-2 flex items-center gap-1.5">
+          <span className="text-base">{icon}</span> Buy {label}
+        </div>
+        <div className="flex items-center gap-2 mb-2">
+          <Input
+            type="number"
+            min={1}
+            max={safeMax}
+            value={qty}
+            onChange={(e) =>
+              setQty(Math.max(1, Math.min(safeMax, Math.floor(Number(e.target.value) || 1))))
+            }
+            className="h-9 text-base font-mono"
+          />
+          <Button size="sm" variant="outline" className="h-9 px-2" onClick={() => setQty(safeMax)}>
+            Max
+          </Button>
+        </div>
+        <Slider
+          min={1}
+          max={safeMax}
+          step={1}
+          value={[qty]}
+          onValueChange={(v) => setQty(v[0])}
+          className="my-3"
+        />
+        <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-2">
+          <span>Cost</span>
+          <span className="font-mono text-foreground">{cost.toLocaleString()}c</span>
+        </div>
+        <Button
+          className="w-full h-9"
+          onClick={() => {
+            onConfirm(qty);
+            setOpen(false);
+          }}
+        >
+          Recruit {qty}
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 
 function emptyUnits(): Units {
   return { infantry: 0, tank: 0, artillery: 0, aircraft: 0, navy: 0, missile: 0 };
