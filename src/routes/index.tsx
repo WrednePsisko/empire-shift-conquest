@@ -5,6 +5,7 @@ import { useGame } from "@/lib/gameStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Crown, Play, Plus, Swords, Search, ChevronLeft } from "lucide-react";
+import { QrPreview } from "@/components/QrPreview";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -68,6 +69,7 @@ function Lobby() {
           <p className="mt-8 text-xs text-muted-foreground/70 max-w-xs">
             Choose a nation. Forge alliances. Conquer the world.
           </p>
+          <QrPreview />
         </div>
       )}
 
