@@ -144,10 +144,12 @@ export const useGame = create<GameState>()(
       tick: 0,
       startMs: 0,
       speed: 1,
+      prevSpeed: 1,
       log: [],
       relations: {},
       opinions: {},
       movements: [],
+      pendingProposals: [],
 
 
       initGame: (playerCountryId, playerCountryName, allCountries) => {
