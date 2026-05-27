@@ -322,36 +322,50 @@ function Play() {
 
               {selectionOwned && !target && (
                 <div className="mt-3 border-t border-border pt-2 space-y-1.5">
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Recruit</div>
-                  {UNIT_TYPES.map((t) => (
-                    <div key={t} className="flex items-center gap-1.5">
-                      <div className="flex items-center gap-1.5 w-[120px] shrink-0">
-                        <span className="text-base">{UNIT_STATS[t].icon}</span>
-                        <div className="min-w-0">
-                          <div className="text-xs font-medium leading-none truncate">{UNIT_STATS[t].label}</div>
-                          <div className="text-[10px] text-muted-foreground">{UNIT_STATS[t].cost}c·⚔{UNIT_STATS[t].power}</div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground flex items-center justify-between">
+                    <span>Recruit</span>
+                    <span className="font-mono text-foreground/80">{Math.floor(player.coins).toLocaleString()}c</span>
+                  </div>
+                  {UNIT_TYPES.map((t) => {
+                    const unitCost = UNIT_STATS[t].cost;
+                    const maxAfford = Math.floor(player.coins / unitCost);
+                    return (
+                      <div key={t} className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 w-[118px] shrink-0">
+                          <span className="text-base">{UNIT_STATS[t].icon}</span>
+                          <div className="min-w-0">
+                            <div className="text-xs font-medium leading-none truncate">{UNIT_STATS[t].label}</div>
+                            <div className="text-[10px] text-muted-foreground">{unitCost}c·⚔{UNIT_STATS[t].power}</div>
+                          </div>
+                        </div>
+                        <div className="flex gap-1 flex-1 justify-end items-center">
+                          {BUY_AMOUNTS.map((q) => {
+                            const cost = q * unitCost;
+                            const disabled = player.coins < cost;
+                            return (
+                              <Button
+                                key={q}
+                                size="sm"
+                                variant="outline"
+                                className="px-1.5 h-7 text-[11px] min-w-[34px]"
+                                disabled={disabled}
+                                onClick={() => buyUnits(selected.id, t, q)}
+                              >
+                                +{q}
+                              </Button>
+                            );
+                          })}
+                          <CustomBuyPopover
+                            max={maxAfford}
+                            unitCost={unitCost}
+                            label={UNIT_STATS[t].label}
+                            icon={UNIT_STATS[t].icon}
+                            onConfirm={(qty) => buyUnits(selected.id, t, qty)}
+                          />
                         </div>
                       </div>
-                      <div className="flex gap-1 flex-1 justify-end">
-                        {BUY_AMOUNTS.map((q) => {
-                          const cost = q * UNIT_STATS[t].cost;
-                          const disabled = player.coins < cost;
-                          return (
-                            <Button
-                              key={q}
-                              size="sm"
-                              variant="outline"
-                              className="px-1.5 h-7 text-[11px] min-w-[34px]"
-                              disabled={disabled}
-                              onClick={() => buyUnits(selected.id, t, q)}
-                            >
-                              +{q}
-                            </Button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   <p className="pt-1 text-[11px] text-muted-foreground">Tap any country to deploy troops (attack enemies, reinforce your own).</p>
                 </div>
               )}
