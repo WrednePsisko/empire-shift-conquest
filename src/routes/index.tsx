@@ -1,10 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { WorldMap } from "@/components/WorldMap";
+import { WorldMap, type MapCountry } from "@/components/WorldMap";
 import { useGame } from "@/lib/gameStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Crown, Play, Plus, Swords, Search, ChevronLeft } from "lucide-react";
+import { QrPreview } from "@/components/QrPreview";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -68,6 +69,7 @@ function Lobby() {
           <p className="mt-8 text-xs text-muted-foreground/70 max-w-xs">
             Choose a nation. Forge alliances. Conquer the world.
           </p>
+          <QrPreview />
         </div>
       )}
 
@@ -79,7 +81,7 @@ function Lobby() {
 function CountryPicker({ onBack }: { onBack: () => void }) {
   const navigate = useNavigate();
   const initGame = useGame((s) => s.initGame);
-  const [countries, setCountries] = useState<{ id: string; name: string; gdpT: number }[]>([]);
+  const [countries, setCountries] = useState<MapCountry[]>([]);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
 

@@ -54,6 +54,7 @@ export interface Country {
   gdpT: number;
   ownerId: string;
   units: Units;
+  centroid: [number, number]; // [lon, lat]
 }
 
 export interface Movement {
@@ -66,30 +67,37 @@ export interface Movement {
   durationMs: number;
 }
 
+export type ProposalKind = "alliance" | "peace";
+export interface Proposal {
+  id: string;
+  fromEmpireId: string;
+  kind: ProposalKind;
+  createdMs: number;
+}
+
 export interface GameState {
   initialized: boolean;
   countries: Record<string, Country>;
   empires: Record<string, Empire>;
   playerEmpireId: string | null;
   playerCapitalId: string | null;
-  tick: number; // days elapsed
-  startMs: number; // ms timestamp of game start (date base)
+  tick: number;
+  startMs: number;
   speed: number; // 0 paused, 1, 2, 4
+  prevSpeed: number; // used when auto-pausing for proposals
   log: string[];
-  // relations[a][b] -- symmetric
   relations: Record<string, Record<string, Relation>>;
-  // opinions[a][b] -- symmetric, -100..100
   opinions: Record<string, Record<string, number>>;
   movements: Movement[];
+  pendingProposals: Proposal[];
 
-  initGame: (playerCountryId: string, playerCountryName: string, allCountries: { id: string; name: string; gdpT: number }[]) => void;
+  initGame: (playerCountryId: string, playerCountryName: string, allCountries: { id: string; name: string; gdpT: number; centroid: [number, number] }[]) => void;
   resetGame: () => void;
   setSpeed: (s: number) => void;
   buyUnits: (countryId: string, type: UnitType, qty: number) => void;
   attack: (fromId: string, toId: string, sent: Units) => void;
   doTick: () => void;
   pushLog: (msg: string) => void;
-  // diplomacy
   getRelation: (a: string, b: string) => Relation;
   setRelation: (a: string, b: string, r: Relation) => void;
   getOpinion: (a: string, b: string) => number;
@@ -98,6 +106,7 @@ export interface GameState {
   breakAlliance: (targetEmpireId: string) => void;
   declareWar: (targetEmpireId: string) => void;
   makePeace: (targetEmpireId: string) => void;
+  resolveProposal: (id: string, accept: boolean) => void;
 }
 
 
@@ -135,10 +144,12 @@ export const useGame = create<GameState>()(
       tick: 0,
       startMs: 0,
       speed: 1,
+      prevSpeed: 1,
       log: [],
       relations: {},
       opinions: {},
       movements: [],
+      pendingProposals: [],
 
 
       initGame: (playerCountryId, playerCountryName, allCountries) => {
@@ -173,6 +184,7 @@ export const useGame = create<GameState>()(
             gdpT: c.gdpT,
             ownerId: empireId,
             units: seedUnits(c.gdpT),
+            centroid: c.centroid,
           };
         }
 
@@ -191,10 +203,11 @@ export const useGame = create<GameState>()(
           tick: 0,
           startMs: Date.now(),
           speed: 1,
+          prevSpeed: 1,
           relations: {},
           opinions: {},
           movements: [],
-
+          pendingProposals: [],
           log: [`${playerCountryName} rises. Your empire begins.`],
         });
       },
@@ -209,14 +222,46 @@ export const useGame = create<GameState>()(
           tick: 0,
           startMs: 0,
           speed: 1,
+          prevSpeed: 1,
           log: [],
           relations: {},
           opinions: {},
           movements: [],
+          pendingProposals: [],
         }),
 
 
-      setSpeed: (speed) => set({ speed }),
+      setSpeed: (speed) => set((s) => ({ speed, prevSpeed: speed > 0 ? speed : s.prevSpeed })),
+
+      resolveProposal: (id, accept) => {
+        const s = get();
+        const p = s.pendingProposals.find((x) => x.id === id);
+        if (!p || !s.playerEmpireId) return;
+        const playerId = s.playerEmpireId;
+        const fromName = s.empires[p.fromEmpireId]?.name ?? "Unknown";
+        if (accept) {
+          if (p.kind === "alliance") {
+            get().setRelation(playerId, p.fromEmpireId, "ally");
+            get().adjustOpinion(playerId, p.fromEmpireId, 25);
+            get().pushLog(`🤝 You accepted ${fromName}'s alliance.`);
+          } else {
+            get().setRelation(playerId, p.fromEmpireId, "neutral");
+            get().adjustOpinion(playerId, p.fromEmpireId, 15);
+            get().pushLog(`🕊 Peace with ${fromName} signed.`);
+          }
+        } else {
+          get().adjustOpinion(playerId, p.fromEmpireId, -10);
+          get().pushLog(`✋ You declined ${fromName}'s ${p.kind}.`);
+        }
+        set((st) => {
+          const remaining = st.pendingProposals.filter((x) => x.id !== id);
+          const next: Partial<GameState> = { pendingProposals: remaining };
+          if (remaining.length === 0 && st.speed === 0) {
+            next.speed = st.prevSpeed || 1;
+          }
+          return next as GameState;
+        });
+      },
 
       pushLog: (msg) => set((s) => ({ log: [msg, ...s.log].slice(0, 60) })),
 
@@ -260,7 +305,7 @@ export const useGame = create<GameState>()(
         if (cur === "ally") return { accepted: false, reason: "Already allied." };
         if (cur === "war") return { accepted: false, reason: "End the war first." };
 
-        // Acceptance odds: based on relative power + opinion
+        // Acceptance odds: more stochastic + opinion / power weighted
         const player = s.empires[playerId];
         const target = s.empires[targetEmpireId];
         if (!target) return { accepted: false, reason: "No such empire." };
@@ -268,9 +313,11 @@ export const useGame = create<GameState>()(
           Object.values(s.countries).filter((c) => c.ownerId === playerId).reduce((a, c) => a + unitPower(c.units) + c.gdpT * 50, 0);
         const targetPower =
           Object.values(s.countries).filter((c) => c.ownerId === targetEmpireId).reduce((a, c) => a + unitPower(c.units) + c.gdpT * 50, 0);
-        const ratio = playerPower / Math.max(1, targetPower);
+        const ratio = Math.min(2.5, playerPower / Math.max(1, targetPower));
         const opinion = s.opinions[playerId]?.[targetEmpireId] ?? 0;
-        const accept = Math.random() < Math.min(0.95, 0.2 + ratio * 0.3 + opinion / 150);
+        // Base chance, leaves real randomness. Range ~5%..85%.
+        const chance = Math.max(0.05, Math.min(0.85, 0.15 + ratio * 0.15 + opinion / 180 + (Math.random() - 0.5) * 0.15));
+        const accept = Math.random() < chance;
         if (accept) {
           get().setRelation(playerId, targetEmpireId, "ally");
           get().adjustOpinion(playerId, targetEmpireId, 30);
@@ -445,8 +492,8 @@ export const useGame = create<GameState>()(
 
         set({ empires, countries, tick: s.tick + 1, movements: stillMoving });
 
-        // AI actions
-        const aiRoll = 0.18 * s.speed;
+        // AI actions — significantly less aggressive, distance-aware
+        const aiRoll = 0.08 * s.speed;
         for (const empire of Object.values(get().empires)) {
           if (empire.isPlayer) continue;
           if (Math.random() > aiRoll) continue;
@@ -454,7 +501,7 @@ export const useGame = create<GameState>()(
           const owned = Object.values(stNow.countries).filter((c) => c.ownerId === empire.id);
           if (owned.length === 0) continue;
 
-          // Buy
+          // Buy (unchanged frequency)
           const buyCountry = owned[Math.floor(Math.random() * owned.length)];
           const type = UNIT_TYPES[Math.floor(Math.random() * UNIT_TYPES.length)];
           const e = stNow.empires[empire.id];
@@ -474,32 +521,45 @@ export const useGame = create<GameState>()(
             }));
           }
 
-          // Diplomacy: occasionally propose alliance with player
-          if (stNow.playerEmpireId && Math.random() < 0.04) {
+          // Diplomacy: occasionally propose alliance to player — now queued as proposal
+          if (stNow.playerEmpireId && Math.random() < 0.025) {
             const rel = pairKey(stNow, empire.id, stNow.playerEmpireId);
             if (rel === "neutral") {
-              const playerOwned = Object.values(stNow.countries).filter((c) => c.ownerId === stNow.playerEmpireId).length;
-              if (playerOwned > 0 && Math.random() < 0.5) {
-                get().setRelation(empire.id, stNow.playerEmpireId, "ally");
-                get().pushLog(`🤝 ${empire.name} proposes alliance — accepted.`);
-              }
+              queueProposal(set, get, empire.id, "alliance");
+            } else if (rel === "war" && Math.random() < 0.4) {
+              queueProposal(set, get, empire.id, "peace");
             }
           }
 
-          // Attack
-          if (Math.random() < 0.55) {
+          // Attack — much rarer, must be geographically reachable
+          if (Math.random() < 0.18) {
             const myStrongest = owned.reduce((a, b) => (unitPower(a.units) > unitPower(b.units) ? a : b));
             const stAttack = get();
-            const others = Object.values(stAttack.countries).filter(
-              (c) => c.ownerId !== empire.id && pairKey(stAttack, c.ownerId, empire.id) !== "ally",
-            );
+            const hasNavy = myStrongest.units.navy > 0 || myStrongest.units.aircraft > 0;
+            const maxReach = hasNavy ? 65 : 28; // degrees; ~global if naval, ~regional otherwise
+            const others = Object.values(stAttack.countries).filter((c) => {
+              if (c.ownerId === empire.id) return false;
+              if (pairKey(stAttack, c.ownerId, empire.id) === "ally") return false;
+              const d = geoDistance(myStrongest.centroid, c.centroid);
+              return d <= maxReach;
+            });
             if (others.length === 0) continue;
-            const targets = others.sort((a, b) => unitPower(a.units) - unitPower(b.units)).slice(0, 6);
-            const target = targets[Math.floor(Math.random() * targets.length)];
+            // Prefer nearby weaker neighbors
+            const scored = others
+              .map((c) => ({
+                c,
+                score: unitPower(c.units) + geoDistance(myStrongest.centroid, c.centroid) * 4,
+              }))
+              .sort((a, b) => a.score - b.score)
+              .slice(0, 5);
+            const target = scored[Math.floor(Math.random() * scored.length)].c;
             const myPower = unitPower(myStrongest.units);
             const tgtPower = unitPower(target.units);
-            if (myPower > tgtPower * 1.1) {
-              const send: Units = scaleUnits(myStrongest.units, 0.75);
+            // Need clear advantage, plus only declare war if not already, with some restraint
+            const rel = pairKey(stAttack, empire.id, target.ownerId);
+            if (rel !== "war" && Math.random() > 0.35) continue; // mostly avoid starting fresh wars
+            if (myPower > tgtPower * 1.35) {
+              const send: Units = scaleUnits(myStrongest.units, 0.6);
               if (unitTotal(send) > 0) get().attack(myStrongest.id, target.id, send);
             }
           }
@@ -507,7 +567,7 @@ export const useGame = create<GameState>()(
       },
     }),
     {
-      name: "empire-shift-save-v4",
+      name: "empire-shift-save-v5",
       partialize: (s) => ({
         initialized: s.initialized,
         countries: s.countries,
@@ -517,12 +577,13 @@ export const useGame = create<GameState>()(
         tick: s.tick,
         startMs: s.startMs,
         speed: s.speed,
+        prevSpeed: s.prevSpeed,
         log: s.log,
         relations: s.relations,
         opinions: s.opinions,
         movements: s.movements,
+        pendingProposals: s.pendingProposals,
       }),
-
     },
   ),
 );
@@ -537,6 +598,42 @@ function addUnits(a: Units, b: Units): Units {
   for (const t of UNIT_TYPES) out[t] = a[t] + b[t];
   return out;
 }
+
+// Great-circle-ish distance between [lon,lat] points, in degrees.
+function geoDistance(a: [number, number], b: [number, number]): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const lat1 = toRad(a[1]);
+  const lat2 = toRad(b[1]);
+  const dLat = lat2 - lat1;
+  const dLon = toRad(b[0] - a[0]);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return (2 * Math.asin(Math.min(1, Math.sqrt(h))) * 180) / Math.PI;
+}
+
+function queueProposal(
+  set: (fn: (s: GameState) => Partial<GameState>) => void,
+  get: () => GameState,
+  fromEmpireId: string,
+  kind: ProposalKind,
+) {
+  const s = get();
+  if (!s.playerEmpireId) return;
+  // Dedupe: don't queue if already a pending proposal from same empire
+  if (s.pendingProposals.some((p) => p.fromEmpireId === fromEmpireId && p.kind === kind)) return;
+  const proposal: Proposal = {
+    id: `p_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    fromEmpireId,
+    kind,
+    createdMs: Date.now(),
+  };
+  set((st) => ({
+    pendingProposals: [...st.pendingProposals, proposal],
+    // auto-pause if currently running
+    prevSpeed: st.speed > 0 ? st.speed : st.prevSpeed,
+    speed: 0,
+  }));
+}
+
 
 // Date helpers: 1 tick = 1 day, starting Jan 1 2025
 export function gameDateLabel(tick: number): string {

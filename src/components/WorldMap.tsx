@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { geoNaturalEarth1, geoPath } from "d3-geo";
+import { geoNaturalEarth1, geoPath, geoCentroid } from "d3-geo";
 import { feature } from "topojson-client";
 import type { Topology } from "topojson-specification";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
@@ -9,6 +9,7 @@ export interface MapCountry {
   id: string;
   name: string;
   gdpT: number;
+  centroid: [number, number]; // [lon, lat]
 }
 
 export interface MapMarker {
@@ -56,7 +57,7 @@ interface Props {
 
 const TOPO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 const MIN_SCALE = 1;
-const MAX_SCALE = 24;
+const MAX_SCALE = 40;
 
 export function WorldMap({
   onCountryClick,
@@ -104,7 +105,8 @@ export function WorldMap({
       loadedRef.current = true;
       const list: MapCountry[] = features.map((f) => {
         const id = String(Number(f.id));
-        return { id, name: f.properties.name, gdpT: getGdp(id) };
+        const c = geoCentroid(f) as [number, number];
+        return { id, name: f.properties.name, gdpT: getGdp(id), centroid: c };
       });
       onCountriesLoaded(list);
     }
@@ -271,34 +273,58 @@ export function WorldMap({
       >
         <defs>
           <radialGradient id="ocean" cx="50%" cy="55%" r="80%">
-            <stop offset="0%" stopColor="#0e2a4a" />
-            <stop offset="55%" stopColor="#0a1d36" />
-            <stop offset="100%" stopColor="#06101f" />
+            <stop offset="0%" stopColor="#10355c" />
+            <stop offset="55%" stopColor="#0a1f3a" />
+            <stop offset="100%" stopColor="#040b1a" />
           </radialGradient>
           <filter id="landShadow" x="-10%" y="-10%" width="120%" height="120%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="0.6" />
-            <feOffset dx="0" dy="0.5" result="off" />
-            <feComponentTransfer><feFuncA type="linear" slope="0.5" /></feComponentTransfer>
+            <feGaussianBlur in="SourceAlpha" stdDeviation="0.8" />
+            <feOffset dx="0" dy="0.8" result="off" />
+            <feComponentTransfer><feFuncA type="linear" slope="0.55" /></feComponentTransfer>
             <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="landGrain" x="0" y="0" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" />
+            <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.08 0" />
+            <feComposite in2="SourceGraphic" operator="in" />
+            <feBlend in="SourceGraphic" mode="overlay" />
           </filter>
           <radialGradient id="markerGlow" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="#fff" stopOpacity="0.45" />
             <stop offset="100%" stopColor="#fff" stopOpacity="0" />
           </radialGradient>
-          <pattern id="oceanGrid" width="24" height="24" patternUnits="userSpaceOnUse">
-            <path d="M24 0H0V24" fill="none" stroke="#1a3556" strokeOpacity="0.18" strokeWidth="0.4" />
+          <pattern id="oceanGrid" width="32" height="32" patternUnits="userSpaceOnUse">
+            <path d="M32 0H0V32" fill="none" stroke="#2a4a72" strokeOpacity="0.16" strokeWidth="0.4" />
+          </pattern>
+          <pattern id="oceanWaves" width="80" height="80" patternUnits="userSpaceOnUse">
+            <path d="M0 20 Q20 14 40 20 T80 20" fill="none" stroke="#3a6aa0" strokeOpacity="0.08" strokeWidth="0.6" />
+            <path d="M0 50 Q20 44 40 50 T80 50" fill="none" stroke="#3a6aa0" strokeOpacity="0.08" strokeWidth="0.6" />
+          </pattern>
+          <pattern id="landHatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="6" stroke="#000" strokeOpacity="0.05" strokeWidth="0.4" />
           </pattern>
         </defs>
         <rect width={width} height={height} fill="url(#ocean)" />
+        <rect width={width} height={height} fill="url(#oceanWaves)" />
         <rect width={width} height={height} fill="url(#oceanGrid)" />
         <g transform={`translate(${view.tx} ${view.ty}) scale(${view.k})`}>
+          {/* graticule */}
+          <g stroke="#5b7fb3" strokeOpacity={0.12} strokeWidth={0.5 / view.k} fill="none">
+            {Array.from({ length: 11 }).map((_, i) => (
+              <line key={`gh-${i}`} x1={0} x2={width} y1={(height * i) / 10} y2={(height * i) / 10} />
+            ))}
+            {Array.from({ length: 19 }).map((_, i) => (
+              <line key={`gv-${i}`} y1={0} y2={height} x1={(width * i) / 18} x2={(width * i) / 18} />
+            ))}
+          </g>
           <path
             d={path({ type: "Sphere" } as never) ?? ""}
             fill="none"
-            stroke="#5b7fb3"
-            strokeOpacity={0.25}
+            stroke="#7fa3d6"
+            strokeOpacity={0.3}
             strokeWidth={1 / view.k}
           />
+
           <g filter="url(#landShadow)">
             {features?.map((f) => {
               const id = String(Number(f.id));
@@ -319,7 +345,7 @@ export function WorldMap({
                   onClick={(e) => {
                     if (movedRef.current) return;
                     e.stopPropagation();
-                    onCountryClick?.({ id, name: f.properties.name, gdpT: getGdp(id) });
+                    onCountryClick?.({ id, name: f.properties.name, gdpT: getGdp(id), centroid: geoCentroid(f) as [number, number] });
                   }}
                 >
                   <title>{f.properties.name}</title>
@@ -460,19 +486,41 @@ export function WorldMap({
       </svg>
 
       {interactive && (
-        <div className="absolute bottom-3 right-3 flex flex-col gap-1.5 z-10">
+        <div className="absolute bottom-3 right-3 flex flex-col items-center gap-1.5 z-10">
           <button
             type="button"
-            onClick={() => zoomBy(1.4)}
-            className="size-10 rounded-md bg-card/90 border border-border text-foreground hover:bg-accent text-xl font-bold backdrop-blur shadow-lg"
+            onClick={() => zoomBy(1.5)}
+            className="size-11 rounded-full bg-card/95 border border-border text-foreground hover:bg-accent text-2xl font-bold backdrop-blur shadow-xl active:scale-95 transition-transform"
             aria-label="Zoom in"
           >
             +
           </button>
+          {/* zoom slider */}
+          <div className="h-32 w-11 rounded-full bg-card/90 border border-border backdrop-blur shadow-lg flex items-center justify-center px-1">
+            <input
+              type="range"
+              min={MIN_SCALE}
+              max={MAX_SCALE}
+              step={0.25}
+              value={view.k}
+              onChange={(e) => {
+                const k = Number(e.target.value);
+                setView((v) => {
+                  const ratio = k / v.k;
+                  const cx = width / 2;
+                  const cy = height / 2;
+                  return clampView({ k, tx: cx - (cx - v.tx) * ratio, ty: cy - (cy - v.ty) * ratio });
+                });
+              }}
+              className="w-28 accent-primary"
+              style={{ writingMode: "vertical-lr" as never, transform: "rotate(180deg)" }}
+              aria-label="Zoom"
+            />
+          </div>
           <button
             type="button"
-            onClick={() => zoomBy(1 / 1.4)}
-            className="size-10 rounded-md bg-card/90 border border-border text-foreground hover:bg-accent text-xl font-bold backdrop-blur shadow-lg"
+            onClick={() => zoomBy(1 / 1.5)}
+            className="size-11 rounded-full bg-card/95 border border-border text-foreground hover:bg-accent text-2xl font-bold backdrop-blur shadow-xl active:scale-95 transition-transform"
             aria-label="Zoom out"
           >
             −
@@ -480,11 +528,14 @@ export function WorldMap({
           <button
             type="button"
             onClick={reset}
-            className="size-10 rounded-md bg-card/90 border border-border text-foreground hover:bg-accent text-sm backdrop-blur shadow-lg"
+            className="size-10 rounded-full bg-card/95 border border-border text-foreground hover:bg-accent text-sm backdrop-blur shadow-lg"
             aria-label="Reset view"
           >
             ⤢
           </button>
+          <div className="mt-1 px-1.5 py-0.5 rounded-md bg-card/90 border border-border text-[10px] font-mono">
+            {view.k.toFixed(1)}×
+          </div>
         </div>
       )}
     </div>
