@@ -203,10 +203,11 @@ export const useGame = create<GameState>()(
           tick: 0,
           startMs: Date.now(),
           speed: 1,
+          prevSpeed: 1,
           relations: {},
           opinions: {},
           movements: [],
-
+          pendingProposals: [],
           log: [`${playerCountryName} rises. Your empire begins.`],
         });
       },
@@ -221,14 +222,46 @@ export const useGame = create<GameState>()(
           tick: 0,
           startMs: 0,
           speed: 1,
+          prevSpeed: 1,
           log: [],
           relations: {},
           opinions: {},
           movements: [],
+          pendingProposals: [],
         }),
 
 
-      setSpeed: (speed) => set({ speed }),
+      setSpeed: (speed) => set((s) => ({ speed, prevSpeed: speed > 0 ? speed : s.prevSpeed })),
+
+      resolveProposal: (id, accept) => {
+        const s = get();
+        const p = s.pendingProposals.find((x) => x.id === id);
+        if (!p || !s.playerEmpireId) return;
+        const playerId = s.playerEmpireId;
+        const fromName = s.empires[p.fromEmpireId]?.name ?? "Unknown";
+        if (accept) {
+          if (p.kind === "alliance") {
+            get().setRelation(playerId, p.fromEmpireId, "ally");
+            get().adjustOpinion(playerId, p.fromEmpireId, 25);
+            get().pushLog(`🤝 You accepted ${fromName}'s alliance.`);
+          } else {
+            get().setRelation(playerId, p.fromEmpireId, "neutral");
+            get().adjustOpinion(playerId, p.fromEmpireId, 15);
+            get().pushLog(`🕊 Peace with ${fromName} signed.`);
+          }
+        } else {
+          get().adjustOpinion(playerId, p.fromEmpireId, -10);
+          get().pushLog(`✋ You declined ${fromName}'s ${p.kind}.`);
+        }
+        set((st) => {
+          const remaining = st.pendingProposals.filter((x) => x.id !== id);
+          const next: Partial<GameState> = { pendingProposals: remaining };
+          if (remaining.length === 0 && st.speed === 0) {
+            next.speed = st.prevSpeed || 1;
+          }
+          return next as GameState;
+        });
+      },
 
       pushLog: (msg) => set((s) => ({ log: [msg, ...s.log].slice(0, 60) })),
 
