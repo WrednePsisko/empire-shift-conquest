@@ -273,34 +273,58 @@ export function WorldMap({
       >
         <defs>
           <radialGradient id="ocean" cx="50%" cy="55%" r="80%">
-            <stop offset="0%" stopColor="#0e2a4a" />
-            <stop offset="55%" stopColor="#0a1d36" />
-            <stop offset="100%" stopColor="#06101f" />
+            <stop offset="0%" stopColor="#10355c" />
+            <stop offset="55%" stopColor="#0a1f3a" />
+            <stop offset="100%" stopColor="#040b1a" />
           </radialGradient>
           <filter id="landShadow" x="-10%" y="-10%" width="120%" height="120%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="0.6" />
-            <feOffset dx="0" dy="0.5" result="off" />
-            <feComponentTransfer><feFuncA type="linear" slope="0.5" /></feComponentTransfer>
+            <feGaussianBlur in="SourceAlpha" stdDeviation="0.8" />
+            <feOffset dx="0" dy="0.8" result="off" />
+            <feComponentTransfer><feFuncA type="linear" slope="0.55" /></feComponentTransfer>
             <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="landGrain" x="0" y="0" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" />
+            <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.08 0" />
+            <feComposite in2="SourceGraphic" operator="in" />
+            <feBlend in="SourceGraphic" mode="overlay" />
           </filter>
           <radialGradient id="markerGlow" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="#fff" stopOpacity="0.45" />
             <stop offset="100%" stopColor="#fff" stopOpacity="0" />
           </radialGradient>
-          <pattern id="oceanGrid" width="24" height="24" patternUnits="userSpaceOnUse">
-            <path d="M24 0H0V24" fill="none" stroke="#1a3556" strokeOpacity="0.18" strokeWidth="0.4" />
+          <pattern id="oceanGrid" width="32" height="32" patternUnits="userSpaceOnUse">
+            <path d="M32 0H0V32" fill="none" stroke="#2a4a72" strokeOpacity="0.16" strokeWidth="0.4" />
+          </pattern>
+          <pattern id="oceanWaves" width="80" height="80" patternUnits="userSpaceOnUse">
+            <path d="M0 20 Q20 14 40 20 T80 20" fill="none" stroke="#3a6aa0" strokeOpacity="0.08" strokeWidth="0.6" />
+            <path d="M0 50 Q20 44 40 50 T80 50" fill="none" stroke="#3a6aa0" strokeOpacity="0.08" strokeWidth="0.6" />
+          </pattern>
+          <pattern id="landHatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="6" stroke="#000" strokeOpacity="0.05" strokeWidth="0.4" />
           </pattern>
         </defs>
         <rect width={width} height={height} fill="url(#ocean)" />
+        <rect width={width} height={height} fill="url(#oceanWaves)" />
         <rect width={width} height={height} fill="url(#oceanGrid)" />
         <g transform={`translate(${view.tx} ${view.ty}) scale(${view.k})`}>
+          {/* graticule */}
+          <g stroke="#5b7fb3" strokeOpacity={0.12} strokeWidth={0.5 / view.k} fill="none">
+            {Array.from({ length: 11 }).map((_, i) => (
+              <line key={`gh-${i}`} x1={0} x2={width} y1={(height * i) / 10} y2={(height * i) / 10} />
+            ))}
+            {Array.from({ length: 19 }).map((_, i) => (
+              <line key={`gv-${i}`} y1={0} y2={height} x1={(width * i) / 18} x2={(width * i) / 18} />
+            ))}
+          </g>
           <path
             d={path({ type: "Sphere" } as never) ?? ""}
             fill="none"
-            stroke="#5b7fb3"
-            strokeOpacity={0.25}
+            stroke="#7fa3d6"
+            strokeOpacity={0.3}
             strokeWidth={1 / view.k}
           />
+
           <g filter="url(#landShadow)">
             {features?.map((f) => {
               const id = String(Number(f.id));
