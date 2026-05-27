@@ -567,7 +567,7 @@ export const useGame = create<GameState>()(
       },
     }),
     {
-      name: "empire-shift-save-v4",
+      name: "empire-shift-save-v5",
       partialize: (s) => ({
         initialized: s.initialized,
         countries: s.countries,
@@ -577,12 +577,13 @@ export const useGame = create<GameState>()(
         tick: s.tick,
         startMs: s.startMs,
         speed: s.speed,
+        prevSpeed: s.prevSpeed,
         log: s.log,
         relations: s.relations,
         opinions: s.opinions,
         movements: s.movements,
+        pendingProposals: s.pendingProposals,
       }),
-
     },
   ),
 );
@@ -597,6 +598,42 @@ function addUnits(a: Units, b: Units): Units {
   for (const t of UNIT_TYPES) out[t] = a[t] + b[t];
   return out;
 }
+
+// Great-circle-ish distance between [lon,lat] points, in degrees.
+function geoDistance(a: [number, number], b: [number, number]): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const lat1 = toRad(a[1]);
+  const lat2 = toRad(b[1]);
+  const dLat = lat2 - lat1;
+  const dLon = toRad(b[0] - a[0]);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return (2 * Math.asin(Math.min(1, Math.sqrt(h))) * 180) / Math.PI;
+}
+
+function queueProposal(
+  set: (fn: (s: GameState) => Partial<GameState>) => void,
+  get: () => GameState,
+  fromEmpireId: string,
+  kind: ProposalKind,
+) {
+  const s = get();
+  if (!s.playerEmpireId) return;
+  // Dedupe: don't queue if already a pending proposal from same empire
+  if (s.pendingProposals.some((p) => p.fromEmpireId === fromEmpireId && p.kind === kind)) return;
+  const proposal: Proposal = {
+    id: `p_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    fromEmpireId,
+    kind,
+    createdMs: Date.now(),
+  };
+  set((st) => ({
+    pendingProposals: [...st.pendingProposals, proposal],
+    // auto-pause if currently running
+    prevSpeed: st.speed > 0 ? st.speed : st.prevSpeed,
+    speed: 0,
+  }));
+}
+
 
 // Date helpers: 1 tick = 1 day, starting Jan 1 2025
 export function gameDateLabel(tick: number): string {
