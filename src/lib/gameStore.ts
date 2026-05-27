@@ -67,21 +67,29 @@ export interface Movement {
   durationMs: number;
 }
 
+export type ProposalKind = "alliance" | "peace";
+export interface Proposal {
+  id: string;
+  fromEmpireId: string;
+  kind: ProposalKind;
+  createdMs: number;
+}
+
 export interface GameState {
   initialized: boolean;
   countries: Record<string, Country>;
   empires: Record<string, Empire>;
   playerEmpireId: string | null;
   playerCapitalId: string | null;
-  tick: number; // days elapsed
-  startMs: number; // ms timestamp of game start (date base)
+  tick: number;
+  startMs: number;
   speed: number; // 0 paused, 1, 2, 4
+  prevSpeed: number; // used when auto-pausing for proposals
   log: string[];
-  // relations[a][b] -- symmetric
   relations: Record<string, Record<string, Relation>>;
-  // opinions[a][b] -- symmetric, -100..100
   opinions: Record<string, Record<string, number>>;
   movements: Movement[];
+  pendingProposals: Proposal[];
 
   initGame: (playerCountryId: string, playerCountryName: string, allCountries: { id: string; name: string; gdpT: number; centroid: [number, number] }[]) => void;
   resetGame: () => void;
@@ -90,7 +98,6 @@ export interface GameState {
   attack: (fromId: string, toId: string, sent: Units) => void;
   doTick: () => void;
   pushLog: (msg: string) => void;
-  // diplomacy
   getRelation: (a: string, b: string) => Relation;
   setRelation: (a: string, b: string, r: Relation) => void;
   getOpinion: (a: string, b: string) => number;
@@ -99,6 +106,7 @@ export interface GameState {
   breakAlliance: (targetEmpireId: string) => void;
   declareWar: (targetEmpireId: string) => void;
   makePeace: (targetEmpireId: string) => void;
+  resolveProposal: (id: string, accept: boolean) => void;
 }
 
 
