@@ -321,7 +321,7 @@ export function WorldMap({
                   onClick={(e) => {
                     if (movedRef.current) return;
                     e.stopPropagation();
-                    onCountryClick?.({ id, name: f.properties.name, gdpT: getGdp(id) });
+                    onCountryClick?.({ id, name: f.properties.name, gdpT: getGdp(id), centroid: geoCentroid(f) as [number, number] });
                   }}
                 >
                   <title>{f.properties.name}</title>
