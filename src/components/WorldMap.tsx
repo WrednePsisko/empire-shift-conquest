@@ -9,6 +9,7 @@ export interface MapCountry {
   id: string;
   name: string;
   gdpT: number;
+  centroid: [number, number]; // [lon, lat]
 }
 
 export interface MapMarker {
