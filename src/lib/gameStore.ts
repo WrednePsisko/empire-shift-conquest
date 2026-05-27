@@ -492,8 +492,8 @@ export const useGame = create<GameState>()(
 
         set({ empires, countries, tick: s.tick + 1, movements: stillMoving });
 
-        // AI actions
-        const aiRoll = 0.18 * s.speed;
+        // AI actions — significantly less aggressive, distance-aware
+        const aiRoll = 0.08 * s.speed;
         for (const empire of Object.values(get().empires)) {
           if (empire.isPlayer) continue;
           if (Math.random() > aiRoll) continue;
@@ -501,7 +501,7 @@ export const useGame = create<GameState>()(
           const owned = Object.values(stNow.countries).filter((c) => c.ownerId === empire.id);
           if (owned.length === 0) continue;
 
-          // Buy
+          // Buy (unchanged frequency)
           const buyCountry = owned[Math.floor(Math.random() * owned.length)];
           const type = UNIT_TYPES[Math.floor(Math.random() * UNIT_TYPES.length)];
           const e = stNow.empires[empire.id];
@@ -521,32 +521,45 @@ export const useGame = create<GameState>()(
             }));
           }
 
-          // Diplomacy: occasionally propose alliance with player
-          if (stNow.playerEmpireId && Math.random() < 0.04) {
+          // Diplomacy: occasionally propose alliance to player — now queued as proposal
+          if (stNow.playerEmpireId && Math.random() < 0.025) {
             const rel = pairKey(stNow, empire.id, stNow.playerEmpireId);
             if (rel === "neutral") {
-              const playerOwned = Object.values(stNow.countries).filter((c) => c.ownerId === stNow.playerEmpireId).length;
-              if (playerOwned > 0 && Math.random() < 0.5) {
-                get().setRelation(empire.id, stNow.playerEmpireId, "ally");
-                get().pushLog(`🤝 ${empire.name} proposes alliance — accepted.`);
-              }
+              queueProposal(set, get, empire.id, "alliance");
+            } else if (rel === "war" && Math.random() < 0.4) {
+              queueProposal(set, get, empire.id, "peace");
             }
           }
 
-          // Attack
-          if (Math.random() < 0.55) {
+          // Attack — much rarer, must be geographically reachable
+          if (Math.random() < 0.18) {
             const myStrongest = owned.reduce((a, b) => (unitPower(a.units) > unitPower(b.units) ? a : b));
             const stAttack = get();
-            const others = Object.values(stAttack.countries).filter(
-              (c) => c.ownerId !== empire.id && pairKey(stAttack, c.ownerId, empire.id) !== "ally",
-            );
+            const hasNavy = myStrongest.units.navy > 0 || myStrongest.units.aircraft > 0;
+            const maxReach = hasNavy ? 65 : 28; // degrees; ~global if naval, ~regional otherwise
+            const others = Object.values(stAttack.countries).filter((c) => {
+              if (c.ownerId === empire.id) return false;
+              if (pairKey(stAttack, c.ownerId, empire.id) === "ally") return false;
+              const d = geoDistance(myStrongest.centroid, c.centroid);
+              return d <= maxReach;
+            });
             if (others.length === 0) continue;
-            const targets = others.sort((a, b) => unitPower(a.units) - unitPower(b.units)).slice(0, 6);
-            const target = targets[Math.floor(Math.random() * targets.length)];
+            // Prefer nearby weaker neighbors
+            const scored = others
+              .map((c) => ({
+                c,
+                score: unitPower(c.units) + geoDistance(myStrongest.centroid, c.centroid) * 4,
+              }))
+              .sort((a, b) => a.score - b.score)
+              .slice(0, 5);
+            const target = scored[Math.floor(Math.random() * scored.length)].c;
             const myPower = unitPower(myStrongest.units);
             const tgtPower = unitPower(target.units);
-            if (myPower > tgtPower * 1.1) {
-              const send: Units = scaleUnits(myStrongest.units, 0.75);
+            // Need clear advantage, plus only declare war if not already, with some restraint
+            const rel = pairKey(stAttack, empire.id, target.ownerId);
+            if (rel !== "war" && Math.random() > 0.35) continue; // mostly avoid starting fresh wars
+            if (myPower > tgtPower * 1.35) {
+              const send: Units = scaleUnits(myStrongest.units, 0.6);
               if (unitTotal(send) > 0) get().attack(myStrongest.id, target.id, send);
             }
           }
