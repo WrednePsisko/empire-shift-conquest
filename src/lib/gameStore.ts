@@ -171,18 +171,16 @@ export const useGame = create<GameState>()(
           coins: 800,
         };
 
-        let colorIdx = 0;
         for (const c of allCountries) {
           const empireId = c.id === playerCountryId ? playerEmpireId : `e_${c.id}`;
           if (!empires[empireId]) {
             empires[empireId] = {
               id: empireId,
               name: c.name,
-              color: EMPIRE_COLORS[colorIdx % EMPIRE_COLORS.length],
+              color: empireColorForId(c.id),
               isPlayer: false,
               coins: 50 + Math.random() * 200,
             };
-            colorIdx++;
           }
           countries[c.id] = {
             id: c.id,
