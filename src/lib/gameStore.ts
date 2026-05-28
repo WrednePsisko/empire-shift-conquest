@@ -111,12 +111,17 @@ export interface GameState {
 }
 
 
-const EMPIRE_COLORS = [
-  "#ef4444", "#f97316", "#eab308", "#84cc16", "#22c55e",
-  "#14b8a6", "#06b6d4", "#3b82f6", "#8b5cf6", "#d946ef",
-  "#ec4899", "#f43f5e", "#a855f7", "#0ea5e9", "#10b981",
-  "#f59e0b", "#6366f1", "#dc2626", "#7c3aed", "#0891b2",
-];
+// Deterministic vibrant color per country id using the golden-angle hue spread.
+// This spreads neighboring numeric ids far apart on the color wheel, so adjacent
+// countries are extremely unlikely to share a hue.
+function empireColorForId(countryId: string): string {
+  const n = Number(countryId) || 0;
+  const hue = (n * 137.508) % 360;
+  // alternate saturation/lightness slightly so similar hues still feel distinct
+  const sat = 62 + (n % 5) * 4; // 62..78
+  const lig = 48 + ((n * 7) % 5) * 3; // 48..60
+  return `hsl(${hue.toFixed(1)} ${sat}% ${lig}%)`;
+}
 
 function seedUnits(gdpT: number): Units {
   const base = Math.max(5, Math.floor(gdpT * 25 + Math.random() * 10));
