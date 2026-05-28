@@ -377,22 +377,26 @@ export function WorldMap({
               const isSel = selectedId === id;
               const isHi = highlightId === id;
               return (
-                <path
-                  key={id}
-                  d={d}
-                  fill={fill}
-                  stroke={isSel ? "#fbbf24" : isHi ? "#ffffff" : stroke}
-                  strokeWidth={(isSel ? 1.8 : isHi ? 1.4 : 0.5) / view.k}
-                  className="transition-[fill] duration-150 hover:brightness-125"
-                  style={{ cursor: onCountryClick ? "pointer" : "inherit" }}
-                  onClick={(e) => {
-                    if (movedRef.current) return;
-                    e.stopPropagation();
-                    onCountryClick?.({ id, name: f.properties.name, gdpT: getGdp(id), centroid: geoCentroid(f) as [number, number] });
-                  }}
-                >
-                  <title>{f.properties.name}</title>
-                </path>
+                <g key={id}>
+                  <path
+                    d={d}
+                    fill={fill}
+                    stroke={isSel ? "#fbbf24" : isHi ? "#ffffff" : stroke}
+                    strokeWidth={(isSel ? 1.8 : isHi ? 1.4 : 0.5) / view.k}
+                    className="transition-[fill] duration-150 hover:brightness-125"
+                    style={{ cursor: onCountryClick ? "pointer" : "inherit" }}
+                    onClick={(e) => {
+                      if (movedRef.current) return;
+                      e.stopPropagation();
+                      onCountryClick?.({ id, name: f.properties.name, gdpT: getGdp(id), centroid: geoCentroid(f) as [number, number] });
+                    }}
+                  >
+                    <title>{f.properties.name}</title>
+                  </path>
+                  {/* topographic contour overlay clipped to country shape */}
+                  <path d={d} fill="url(#topoContours)" pointerEvents="none" opacity={0.55} />
+                  <path d={d} fill="url(#landHatch)" pointerEvents="none" />
+                </g>
               );
             })}
           </g>
