@@ -257,14 +257,7 @@ export const useGame = create<GameState>()(
           get().adjustOpinion(playerId, p.fromEmpireId, -10);
           get().pushLog(`✋ You declined ${fromName}'s ${p.kind}.`);
         }
-        set((st) => {
-          const remaining = st.pendingProposals.filter((x) => x.id !== id);
-          const next: Partial<GameState> = { pendingProposals: remaining };
-          if (remaining.length === 0 && st.speed === 0) {
-            next.speed = st.prevSpeed || 1;
-          }
-          return next as GameState;
-        });
+        set((st) => ({ pendingProposals: st.pendingProposals.filter((x) => x.id !== id) }));
       },
 
       pushLog: (msg) => set((s) => ({ log: [msg, ...s.log].slice(0, 60) })),
