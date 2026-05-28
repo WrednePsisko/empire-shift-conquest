@@ -12,6 +12,7 @@ import {
   type UnitType,
   type Units,
 } from "@/lib/gameStore";
+import { canReachCountry } from "@/lib/gameStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
@@ -130,7 +131,7 @@ function Play() {
         id: c.id,
         label: total >= 1000 ? `${Math.floor(total / 1000)}k` : String(total),
         color: empire.color,
-        icon: UNIT_STATS[dominant].icon,
+        iconKey: dominant,
         selectable: isOwn,
         selected: isOwn && selectedId === c.id,
       });
@@ -156,6 +157,8 @@ function Play() {
 
   const selectionOwned = selected?.ownerId === playerEmpireId;
   const relWithTarget = selected && playerEmpireId ? relations[playerEmpireId]?.[selected.ownerId] ?? "neutral" : "neutral";
+  const reachable = selected && target ? canReachCountry(selected, target) : true;
+  const reachBlocked = !!(selected && target && target.ownerId !== playerEmpireId && !reachable);
 
   const handleCountryClick = (id: string) => {
     const country = countries[id];
@@ -407,11 +410,17 @@ function Play() {
                       </div>
                     ))}
                   </div>
+                  {reachBlocked && (
+                    <div className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 text-destructive text-[11px] px-2 py-1.5">
+                      No route: needs a shared land border, or both nations must have sea access.
+                    </div>
+                  )}
                   <div className="flex gap-2 mt-2">
                     <Button variant="ghost" className="flex-1 h-10" onClick={() => setTargetId(null)}>Cancel</Button>
                     <Button
                       className="flex-1 h-10"
                       variant={target.ownerId === playerEmpireId ? "default" : "destructive"}
+                      disabled={reachBlocked}
                       onClick={launchAttack}
                     >
                       <Swords className="size-4 mr-1.5" /> {target.ownerId === playerEmpireId ? "Send" : "Attack"}
@@ -523,45 +532,40 @@ function Play() {
         </aside>
       </div>
 
-      {/* Proposal modal (auto-pauses game) */}
+      {/* Non-blocking proposal notification (does NOT pause the game) */}
       {pendingProposals.length > 0 && (() => {
         const p = pendingProposals[0];
         const from = empires[p.fromEmpireId];
         if (!from) return null;
         const op = opinions[playerEmpireId!]?.[p.fromEmpireId] ?? 0;
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-            <div className="w-full max-w-sm rounded-2xl border-2 border-primary/60 bg-card shadow-2xl shadow-primary/20 overflow-hidden animate-in zoom-in-95">
-              <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 text-[10px] uppercase tracking-[0.3em] text-primary font-semibold flex items-center justify-between">
-                <span>Diplomatic Cable</span>
-                <span className="font-mono normal-case tracking-normal text-muted-foreground">Game paused</span>
-              </div>
-              <div className="p-5 text-center">
-                <div className="mx-auto mb-3 size-14 rounded-full flex items-center justify-center text-2xl border-2" style={{ borderColor: from.color, background: `${from.color}22` }}>
-                  {p.kind === "alliance" ? "🤝" : "🕊"}
+          <div className="fixed top-[88px] left-1/2 -translate-x-1/2 z-40 w-[min(420px,92vw)] pointer-events-none">
+            <div className="rounded-xl border border-primary/50 bg-card/95 backdrop-blur shadow-xl shadow-primary/10 overflow-hidden pointer-events-auto animate-in slide-in-from-top-4 fade-in">
+              <div className="flex items-center gap-2 px-3 py-2">
+                <span
+                  className="inline-flex items-center justify-center size-8 rounded-full border-2 shrink-0"
+                  style={{ borderColor: from.color, background: `${from.color}22` }}
+                >
+                  {p.kind === "alliance" ? <Handshake className="size-4" /> : <Flag className="size-4" />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground leading-none">
+                    {p.kind === "alliance" ? "Alliance offer" : "Peace proposal"}
+                  </div>
+                  <div className="text-sm font-semibold truncate flex items-center gap-1.5">
+                    {from.name}
+                    <OpinionBadge score={op} small />
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground uppercase tracking-widest">From</div>
-                <div className="text-xl font-bold mt-0.5 flex items-center justify-center gap-2 flex-wrap">
-                  <span className="inline-block size-3 rounded-sm" style={{ background: from.color }} />
-                  {from.name}
-                  <OpinionBadge score={op} small />
-                </div>
-                <p className="mt-3 text-sm text-foreground/90">
-                  {p.kind === "alliance"
-                    ? `${from.name} proposes a mutual alliance. Will you stand together?`
-                    : `${from.name} sues for peace. Will you accept their olive branch?`}
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-2 p-3 pt-0">
-                <Button variant="outline" className="h-12" onClick={() => resolveProposal(p.id, false)}>
-                  <X className="size-4 mr-1.5" /> Reject
+                <Button size="sm" variant="outline" className="h-8 px-2" onClick={() => resolveProposal(p.id, false)}>
+                  <X className="size-3.5" />
                 </Button>
-                <Button className="h-12" onClick={() => resolveProposal(p.id, true)}>
-                  <Check className="size-4 mr-1.5" /> Accept
+                <Button size="sm" className="h-8 px-2" onClick={() => resolveProposal(p.id, true)}>
+                  <Check className="size-3.5" />
                 </Button>
               </div>
               {pendingProposals.length > 1 && (
-                <div className="text-center text-[11px] text-muted-foreground pb-3">
+                <div className="text-center text-[10px] text-muted-foreground pb-1.5">
                   +{pendingProposals.length - 1} more pending
                 </div>
               )}

@@ -16,7 +16,9 @@ export interface MapMarker {
   id: string;
   label: string;
   color: string;
+  /** Either an emoji/glyph (legacy) or a known unit-type key rendered as an SVG icon */
   icon?: string;
+  iconKey?: "infantry" | "tank" | "artillery" | "aircraft" | "navy" | "missile";
   selectable?: boolean;
   selected?: boolean;
 }
@@ -303,6 +305,47 @@ export function WorldMap({
           <pattern id="landHatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
             <line x1="0" y1="0" x2="0" y2="6" stroke="#000" strokeOpacity="0.05" strokeWidth="0.4" />
           </pattern>
+          {/* Topographic contour overlay — subtle, applied over land */}
+          <pattern id="topoContours" width="60" height="60" patternUnits="userSpaceOnUse">
+            <path d="M0 12 Q15 6 30 12 T60 12" fill="none" stroke="#1a0f08" strokeOpacity="0.18" strokeWidth="0.45" />
+            <path d="M0 28 Q15 22 30 28 T60 28" fill="none" stroke="#1a0f08" strokeOpacity="0.14" strokeWidth="0.45" />
+            <path d="M0 44 Q15 38 30 44 T60 44" fill="none" stroke="#1a0f08" strokeOpacity="0.12" strokeWidth="0.45" />
+            <path d="M0 56 Q15 50 30 56 T60 56" fill="none" stroke="#1a0f08" strokeOpacity="0.16" strokeWidth="0.45" />
+          </pattern>
+          <filter id="topoNoise">
+            <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="2" seed="3" />
+            <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.12 0" />
+            <feComposite in2="SourceGraphic" operator="in" />
+          </filter>
+          {/* Unit-type SVG glyphs (no emoji) */}
+          <symbol id="g_infantry" viewBox="-10 -10 20 20">
+            <path d="M0 -6 L4 -2 L4 6 L-4 6 L-4 -2 Z" fill="currentColor" />
+            <circle cx="0" cy="-6" r="2.2" fill="currentColor" />
+          </symbol>
+          <symbol id="g_tank" viewBox="-10 -10 20 20">
+            <rect x="-7" y="-1" width="14" height="6" rx="1" fill="currentColor" />
+            <rect x="-4" y="-5" width="8" height="4" rx="0.8" fill="currentColor" />
+            <rect x="3" y="-4" width="6" height="1.2" fill="currentColor" />
+          </symbol>
+          <symbol id="g_artillery" viewBox="-10 -10 20 20">
+            <circle cx="-3" cy="3" r="3" fill="currentColor" />
+            <rect x="-2" y="-6" width="11" height="2" rx="0.6" fill="currentColor" transform="rotate(-25 -2 -5)" />
+          </symbol>
+          <symbol id="g_aircraft" viewBox="-10 -10 20 20">
+            <path d="M0 -7 L1.4 -1 L8 1 L1.4 2 L1 7 L-1 7 L-1.4 2 L-8 1 L-1.4 -1 Z" fill="currentColor" />
+          </symbol>
+          <symbol id="g_navy" viewBox="-10 -10 20 20">
+            <path d="M-7 2 L7 2 L5 6 L-5 6 Z" fill="currentColor" />
+            <rect x="-0.6" y="-7" width="1.2" height="9" fill="currentColor" />
+            <path d="M0.6 -6 L6 -1 L0.6 -1 Z" fill="currentColor" />
+          </symbol>
+          <symbol id="g_missile" viewBox="-10 -10 20 20">
+            <path d="M0 -8 L3 -2 L3 6 L-3 6 L-3 -2 Z" fill="currentColor" />
+            <path d="M-3 4 L-6 7 L-3 6 Z M3 4 L6 7 L3 6 Z" fill="currentColor" />
+          </symbol>
+          <symbol id="g_arrow" viewBox="-10 -10 20 20">
+            <path d="M-7 -5 L7 0 L-7 5 L-3 0 Z" fill="currentColor" />
+          </symbol>
         </defs>
         <rect width={width} height={height} fill="url(#ocean)" />
         <rect width={width} height={height} fill="url(#oceanWaves)" />
@@ -334,22 +377,26 @@ export function WorldMap({
               const isSel = selectedId === id;
               const isHi = highlightId === id;
               return (
-                <path
-                  key={id}
-                  d={d}
-                  fill={fill}
-                  stroke={isSel ? "#fbbf24" : isHi ? "#ffffff" : stroke}
-                  strokeWidth={(isSel ? 1.8 : isHi ? 1.4 : 0.5) / view.k}
-                  className="transition-[fill] duration-150 hover:brightness-125"
-                  style={{ cursor: onCountryClick ? "pointer" : "inherit" }}
-                  onClick={(e) => {
-                    if (movedRef.current) return;
-                    e.stopPropagation();
-                    onCountryClick?.({ id, name: f.properties.name, gdpT: getGdp(id), centroid: geoCentroid(f) as [number, number] });
-                  }}
-                >
-                  <title>{f.properties.name}</title>
-                </path>
+                <g key={id}>
+                  <path
+                    d={d}
+                    fill={fill}
+                    stroke={isSel ? "#fbbf24" : isHi ? "#ffffff" : stroke}
+                    strokeWidth={(isSel ? 1.8 : isHi ? 1.4 : 0.5) / view.k}
+                    className="transition-[fill] duration-150 hover:brightness-125"
+                    style={{ cursor: onCountryClick ? "pointer" : "inherit" }}
+                    onClick={(e) => {
+                      if (movedRef.current) return;
+                      e.stopPropagation();
+                      onCountryClick?.({ id, name: f.properties.name, gdpT: getGdp(id), centroid: geoCentroid(f) as [number, number] });
+                    }}
+                  >
+                    <title>{f.properties.name}</title>
+                  </path>
+                  {/* topographic contour overlay clipped to country shape */}
+                  <path d={d} fill="url(#topoContours)" pointerEvents="none" opacity={0.55} />
+                  <path d={d} fill="url(#landHatch)" pointerEvents="none" />
+                </g>
               );
             })}
           </g>
@@ -427,11 +474,18 @@ export function WorldMap({
                 >
                   {m.label}
                 </text>
-                {m.icon && (
+                {m.iconKey ? (
+                  <g
+                    transform={`translate(0 ${-r * 0.55}) scale(${labelScale * 0.9})`}
+                    style={{ color: "#0a0a0a" }}
+                  >
+                    <use href={`#g_${m.iconKey}`} width={14} height={14} x={-7} y={-7} />
+                  </g>
+                ) : m.icon ? (
                   <text y={-r * 0.4} textAnchor="middle" fontSize={6 * labelScale} fill="#0a0a0a">
                     {m.icon}
                   </text>
-                )}
+                ) : null}
               </g>
             );
           })}
@@ -468,16 +522,9 @@ export function WorldMap({
                 <g transform={`translate(${x} ${y}) rotate(${angle})`}>
                   <circle r={r * 1.6} fill={mv.color} opacity={0.25} />
                   <circle r={r} fill={mv.color} stroke="#0a0a0a" strokeWidth={1.4 * labelScale} />
-                  <text
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                    fontSize={r * 1.2}
-                    transform={`rotate(${-angle})`}
-                    fill="#0a0a0a"
-                    fontWeight={700}
-                  >
-                    ⚔
-                  </text>
+                  <g style={{ color: "#0a0a0a" }}>
+                    <use href="#g_arrow" width={r * 1.6} height={r * 1.6} x={-r * 0.8} y={-r * 0.8} />
+                  </g>
                 </g>
               </g>
             );
@@ -486,55 +533,33 @@ export function WorldMap({
       </svg>
 
       {interactive && (
-        <div className="absolute bottom-3 right-3 flex flex-col items-center gap-1.5 z-10">
-          <button
-            type="button"
-            onClick={() => zoomBy(1.5)}
-            className="size-11 rounded-full bg-card/95 border border-border text-foreground hover:bg-accent text-2xl font-bold backdrop-blur shadow-xl active:scale-95 transition-transform"
-            aria-label="Zoom in"
-          >
-            +
-          </button>
-          {/* zoom slider */}
-          <div className="h-32 w-11 rounded-full bg-card/90 border border-border backdrop-blur shadow-lg flex items-center justify-center px-1">
-            <input
-              type="range"
-              min={MIN_SCALE}
-              max={MAX_SCALE}
-              step={0.25}
-              value={view.k}
-              onChange={(e) => {
-                const k = Number(e.target.value);
-                setView((v) => {
-                  const ratio = k / v.k;
-                  const cx = width / 2;
-                  const cy = height / 2;
-                  return clampView({ k, tx: cx - (cx - v.tx) * ratio, ty: cy - (cy - v.ty) * ratio });
-                });
-              }}
-              className="w-28 accent-primary"
-              style={{ writingMode: "vertical-lr" as never, transform: "rotate(180deg)" }}
-              aria-label="Zoom"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => zoomBy(1 / 1.5)}
-            className="size-11 rounded-full bg-card/95 border border-border text-foreground hover:bg-accent text-2xl font-bold backdrop-blur shadow-xl active:scale-95 transition-transform"
-            aria-label="Zoom out"
-          >
-            −
-          </button>
-          <button
-            type="button"
-            onClick={reset}
-            className="size-10 rounded-full bg-card/95 border border-border text-foreground hover:bg-accent text-sm backdrop-blur shadow-lg"
-            aria-label="Reset view"
-          >
-            ⤢
-          </button>
-          <div className="mt-1 px-1.5 py-0.5 rounded-md bg-card/90 border border-border text-[10px] font-mono">
-            {view.k.toFixed(1)}×
+        <div className="absolute top-2 right-2 flex flex-col items-center gap-1 z-10 pointer-events-none">
+          <div className="flex flex-col items-center gap-1 rounded-full bg-card/90 border border-border backdrop-blur shadow-lg p-1 pointer-events-auto">
+            <button
+              type="button"
+              onClick={() => zoomBy(1.6)}
+              className="size-8 rounded-full hover:bg-accent text-lg font-bold leading-none active:scale-95 transition-transform"
+              aria-label="Zoom in"
+            >
+              +
+            </button>
+            <div className="text-[9px] font-mono text-muted-foreground">{view.k.toFixed(1)}×</div>
+            <button
+              type="button"
+              onClick={() => zoomBy(1 / 1.6)}
+              className="size-8 rounded-full hover:bg-accent text-lg font-bold leading-none active:scale-95 transition-transform"
+              aria-label="Zoom out"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              onClick={reset}
+              className="size-7 rounded-full hover:bg-accent text-xs leading-none"
+              aria-label="Reset view"
+            >
+              ⤢
+            </button>
           </div>
         </div>
       )}

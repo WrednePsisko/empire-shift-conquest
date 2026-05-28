@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { hasSeaAccess } from "./countryData";
 
 export type UnitType = "infantry" | "tank" | "artillery" | "aircraft" | "navy" | "missile";
 
@@ -110,12 +111,17 @@ export interface GameState {
 }
 
 
-const EMPIRE_COLORS = [
-  "#ef4444", "#f97316", "#eab308", "#84cc16", "#22c55e",
-  "#14b8a6", "#06b6d4", "#3b82f6", "#8b5cf6", "#d946ef",
-  "#ec4899", "#f43f5e", "#a855f7", "#0ea5e9", "#10b981",
-  "#f59e0b", "#6366f1", "#dc2626", "#7c3aed", "#0891b2",
-];
+// Deterministic vibrant color per country id using the golden-angle hue spread.
+// This spreads neighboring numeric ids far apart on the color wheel, so adjacent
+// countries are extremely unlikely to share a hue.
+function empireColorForId(countryId: string): string {
+  const n = Number(countryId) || 0;
+  const hue = (n * 137.508) % 360;
+  // alternate saturation/lightness slightly so similar hues still feel distinct
+  const sat = 62 + (n % 5) * 4; // 62..78
+  const lig = 48 + ((n * 7) % 5) * 3; // 48..60
+  return `hsl(${hue.toFixed(1)} ${sat}% ${lig}%)`;
+}
 
 function seedUnits(gdpT: number): Units {
   const base = Math.max(5, Math.floor(gdpT * 25 + Math.random() * 10));
@@ -165,18 +171,16 @@ export const useGame = create<GameState>()(
           coins: 800,
         };
 
-        let colorIdx = 0;
         for (const c of allCountries) {
           const empireId = c.id === playerCountryId ? playerEmpireId : `e_${c.id}`;
           if (!empires[empireId]) {
             empires[empireId] = {
               id: empireId,
               name: c.name,
-              color: EMPIRE_COLORS[colorIdx % EMPIRE_COLORS.length],
+              color: empireColorForId(c.id),
               isPlayer: false,
               coins: 50 + Math.random() * 200,
             };
-            colorIdx++;
           }
           countries[c.id] = {
             id: c.id,
@@ -253,14 +257,7 @@ export const useGame = create<GameState>()(
           get().adjustOpinion(playerId, p.fromEmpireId, -10);
           get().pushLog(`✋ You declined ${fromName}'s ${p.kind}.`);
         }
-        set((st) => {
-          const remaining = st.pendingProposals.filter((x) => x.id !== id);
-          const next: Partial<GameState> = { pendingProposals: remaining };
-          if (remaining.length === 0 && st.speed === 0) {
-            next.speed = st.prevSpeed || 1;
-          }
-          return next as GameState;
-        });
+        set((st) => ({ pendingProposals: st.pendingProposals.filter((x) => x.id !== id) }));
       },
 
       pushLog: (msg) => set((s) => ({ log: [msg, ...s.log].slice(0, 60) })),
@@ -388,10 +385,11 @@ export const useGame = create<GameState>()(
         const sameOwner = from.ownerId === to.ownerId;
         // alliance check only matters for hostile movement
         if (!sameOwner && pairKey(s, from.ownerId, to.ownerId) === "ally") return;
+        // Reachability: same owner reinforcement always allowed; hostile moves require land border OR both sea access
+        if (!sameOwner && !canReachCountry(from, to)) return;
         const total = unitTotal(sent);
         if (total < 1) return;
         for (const t of UNIT_TYPES) if (sent[t] > from.units[t]) return;
-
 
         // Deduct sent units from source immediately (they're en route)
         const fromRemaining: Units = { ...emptyUnits() };
@@ -407,7 +405,13 @@ export const useGame = create<GameState>()(
           get().adjustOpinion(attackerEmpire.id, defenderEmpire.id, -30);
         }
 
-
+        // Travel time scales with army size: 100 → normal, 1000 → 95% speed, 10k → 90%, capped 50%.
+        const slowFactor = Math.max(0.5, 1 - 0.05 * Math.log10(Math.max(1, total / 100)));
+        // Distance also lengthens travel — simple logistics
+        const distDeg = geoDistance(from.centroid, to.centroid);
+        const distFactor = 1 + Math.min(2.5, distDeg / 30);
+        const baseDuration = 2200;
+        const durationMs = Math.round((baseDuration / slowFactor) * distFactor);
 
         const movement: Movement = {
           id: `m_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -416,7 +420,7 @@ export const useGame = create<GameState>()(
           sent,
           attackerEmpireId: from.ownerId,
           startMs: Date.now(),
-          durationMs: 2200,
+          durationMs,
         };
 
         set({
@@ -492,7 +496,7 @@ export const useGame = create<GameState>()(
 
         set({ empires, countries, tick: s.tick + 1, movements: stillMoving });
 
-        // AI actions — significantly less aggressive, distance-aware
+        // AI actions — significantly less aggressive, distance + adjacency aware
         const aiRoll = 0.08 * s.speed;
         for (const empire of Object.values(get().empires)) {
           if (empire.isPlayer) continue;
@@ -521,8 +525,8 @@ export const useGame = create<GameState>()(
             }));
           }
 
-          // Diplomacy: occasionally propose alliance to player — now queued as proposal
-          if (stNow.playerEmpireId && Math.random() < 0.025) {
+          // Diplomacy: rare alliance/peace overtures (~10× less frequent than before)
+          if (stNow.playerEmpireId && Math.random() < 0.0025) {
             const rel = pairKey(stNow, empire.id, stNow.playerEmpireId);
             if (rel === "neutral") {
               queueProposal(set, get, empire.id, "alliance");
@@ -531,20 +535,16 @@ export const useGame = create<GameState>()(
             }
           }
 
-          // Attack — much rarer, must be geographically reachable
-          if (Math.random() < 0.18) {
+          // Attack — rarer, must be reachable (land border or both have sea access)
+          if (Math.random() < 0.07) {
             const myStrongest = owned.reduce((a, b) => (unitPower(a.units) > unitPower(b.units) ? a : b));
             const stAttack = get();
-            const hasNavy = myStrongest.units.navy > 0 || myStrongest.units.aircraft > 0;
-            const maxReach = hasNavy ? 65 : 28; // degrees; ~global if naval, ~regional otherwise
             const others = Object.values(stAttack.countries).filter((c) => {
               if (c.ownerId === empire.id) return false;
               if (pairKey(stAttack, c.ownerId, empire.id) === "ally") return false;
-              const d = geoDistance(myStrongest.centroid, c.centroid);
-              return d <= maxReach;
+              return canReachCountry(myStrongest, c);
             });
             if (others.length === 0) continue;
-            // Prefer nearby weaker neighbors
             const scored = others
               .map((c) => ({
                 c,
@@ -555,11 +555,11 @@ export const useGame = create<GameState>()(
             const target = scored[Math.floor(Math.random() * scored.length)].c;
             const myPower = unitPower(myStrongest.units);
             const tgtPower = unitPower(target.units);
-            // Need clear advantage, plus only declare war if not already, with some restraint
             const rel = pairKey(stAttack, empire.id, target.ownerId);
-            if (rel !== "war" && Math.random() > 0.35) continue; // mostly avoid starting fresh wars
-            if (myPower > tgtPower * 1.35) {
-              const send: Units = scaleUnits(myStrongest.units, 0.6);
+            // Strong restraint when not already at war — gradual escalation
+            if (rel !== "war" && Math.random() > 0.12) continue;
+            if (myPower > tgtPower * 1.5) {
+              const send: Units = scaleUnits(myStrongest.units, 0.55);
               if (unitTotal(send) > 0) get().attack(myStrongest.id, target.id, send);
             }
           }
@@ -610,6 +610,19 @@ function geoDistance(a: [number, number], b: [number, number]): number {
   return (2 * Math.asin(Math.min(1, Math.sqrt(h))) * 180) / Math.PI;
 }
 
+// Two countries are considered reachable for hostile movement if they share a
+// rough "land border" (centroids within ~14 degrees great-circle) OR both have
+// sea access (so navies can connect them).
+export function canReachCountry(
+  from: { id: string; centroid: [number, number] },
+  to: { id: string; centroid: [number, number] },
+): boolean {
+  if (from.id === to.id) return true;
+  const d = geoDistance(from.centroid, to.centroid);
+  if (d <= 14) return true; // land-neighbor proxy
+  return hasSeaAccess(from.id) && hasSeaAccess(to.id);
+}
+
 function queueProposal(
   set: (fn: (s: GameState) => Partial<GameState>) => void,
   get: () => GameState,
@@ -618,7 +631,6 @@ function queueProposal(
 ) {
   const s = get();
   if (!s.playerEmpireId) return;
-  // Dedupe: don't queue if already a pending proposal from same empire
   if (s.pendingProposals.some((p) => p.fromEmpireId === fromEmpireId && p.kind === kind)) return;
   const proposal: Proposal = {
     id: `p_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -626,12 +638,7 @@ function queueProposal(
     kind,
     createdMs: Date.now(),
   };
-  set((st) => ({
-    pendingProposals: [...st.pendingProposals, proposal],
-    // auto-pause if currently running
-    prevSpeed: st.speed > 0 ? st.speed : st.prevSpeed,
-    speed: 0,
-  }));
+  set((st) => ({ pendingProposals: [...st.pendingProposals, proposal] }));
 }
 
 
