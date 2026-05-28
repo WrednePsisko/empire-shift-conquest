@@ -392,10 +392,11 @@ export const useGame = create<GameState>()(
         const sameOwner = from.ownerId === to.ownerId;
         // alliance check only matters for hostile movement
         if (!sameOwner && pairKey(s, from.ownerId, to.ownerId) === "ally") return;
+        // Reachability: same owner reinforcement always allowed; hostile moves require land border OR both sea access
+        if (!sameOwner && !canReachCountry(from, to)) return;
         const total = unitTotal(sent);
         if (total < 1) return;
         for (const t of UNIT_TYPES) if (sent[t] > from.units[t]) return;
-
 
         // Deduct sent units from source immediately (they're en route)
         const fromRemaining: Units = { ...emptyUnits() };
@@ -411,7 +412,13 @@ export const useGame = create<GameState>()(
           get().adjustOpinion(attackerEmpire.id, defenderEmpire.id, -30);
         }
 
-
+        // Travel time scales with army size: 100 → normal, 1000 → 95% speed, 10k → 90%, capped 50%.
+        const slowFactor = Math.max(0.5, 1 - 0.05 * Math.log10(Math.max(1, total / 100)));
+        // Distance also lengthens travel — simple logistics
+        const distDeg = geoDistance(from.centroid, to.centroid);
+        const distFactor = 1 + Math.min(2.5, distDeg / 30);
+        const baseDuration = 2200;
+        const durationMs = Math.round((baseDuration / slowFactor) * distFactor);
 
         const movement: Movement = {
           id: `m_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -420,7 +427,7 @@ export const useGame = create<GameState>()(
           sent,
           attackerEmpireId: from.ownerId,
           startMs: Date.now(),
-          durationMs: 2200,
+          durationMs,
         };
 
         set({
