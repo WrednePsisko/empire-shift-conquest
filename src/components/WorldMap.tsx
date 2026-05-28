@@ -474,11 +474,18 @@ export function WorldMap({
                 >
                   {m.label}
                 </text>
-                {m.icon && (
+                {m.iconKey ? (
+                  <g
+                    transform={`translate(0 ${-r * 0.55}) scale(${labelScale * 0.9})`}
+                    style={{ color: "#0a0a0a" }}
+                  >
+                    <use href={`#g_${m.iconKey}`} width={14} height={14} x={-7} y={-7} />
+                  </g>
+                ) : m.icon ? (
                   <text y={-r * 0.4} textAnchor="middle" fontSize={6 * labelScale} fill="#0a0a0a">
                     {m.icon}
                   </text>
-                )}
+                ) : null}
               </g>
             );
           })}
