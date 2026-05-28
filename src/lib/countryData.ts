@@ -17,11 +17,22 @@ export const COUNTRY_GDP: Record<string, number> = {
 };
 
 // ISO numeric codes of regions players cannot play / are filtered from the world.
-// Antarctica, French Southern & Antarctic Lands.
 export const EXCLUDED_COUNTRY_IDS = new Set<string>(["10", "260"]);
+
+// Well-known landlocked countries (ISO numeric). No direct sea access.
+export const LANDLOCKED_COUNTRY_IDS = new Set<string>([
+  "4","20","51","40","31","112","64","68","72","854","108","140","148","203",
+  "748","231","348","398","417","418","426","438","442","454","466","498","496",
+  "524","562","807","600","646","674","688","703","728","756","762","795","800",
+  "860","336","894","716",
+]);
 
 export function isPlayableCountry(id: string | number): boolean {
   return !EXCLUDED_COUNTRY_IDS.has(String(Number(id)));
+}
+
+export function hasSeaAccess(id: string | number): boolean {
+  return !LANDLOCKED_COUNTRY_IDS.has(String(Number(id)));
 }
 
 export function getGdp(id: string | number): number {
