@@ -503,7 +503,7 @@ export const useGame = create<GameState>()(
 
         set({ empires, countries, tick: s.tick + 1, movements: stillMoving });
 
-        // AI actions — significantly less aggressive, distance-aware
+        // AI actions — significantly less aggressive, distance + adjacency aware
         const aiRoll = 0.08 * s.speed;
         for (const empire of Object.values(get().empires)) {
           if (empire.isPlayer) continue;
@@ -532,8 +532,8 @@ export const useGame = create<GameState>()(
             }));
           }
 
-          // Diplomacy: occasionally propose alliance to player — now queued as proposal
-          if (stNow.playerEmpireId && Math.random() < 0.025) {
+          // Diplomacy: rare alliance/peace overtures (~10× less frequent than before)
+          if (stNow.playerEmpireId && Math.random() < 0.0025) {
             const rel = pairKey(stNow, empire.id, stNow.playerEmpireId);
             if (rel === "neutral") {
               queueProposal(set, get, empire.id, "alliance");
@@ -542,20 +542,16 @@ export const useGame = create<GameState>()(
             }
           }
 
-          // Attack — much rarer, must be geographically reachable
-          if (Math.random() < 0.18) {
+          // Attack — rarer, must be reachable (land border or both have sea access)
+          if (Math.random() < 0.07) {
             const myStrongest = owned.reduce((a, b) => (unitPower(a.units) > unitPower(b.units) ? a : b));
             const stAttack = get();
-            const hasNavy = myStrongest.units.navy > 0 || myStrongest.units.aircraft > 0;
-            const maxReach = hasNavy ? 65 : 28; // degrees; ~global if naval, ~regional otherwise
             const others = Object.values(stAttack.countries).filter((c) => {
               if (c.ownerId === empire.id) return false;
               if (pairKey(stAttack, c.ownerId, empire.id) === "ally") return false;
-              const d = geoDistance(myStrongest.centroid, c.centroid);
-              return d <= maxReach;
+              return canReachCountry(myStrongest, c);
             });
             if (others.length === 0) continue;
-            // Prefer nearby weaker neighbors
             const scored = others
               .map((c) => ({
                 c,
@@ -566,11 +562,11 @@ export const useGame = create<GameState>()(
             const target = scored[Math.floor(Math.random() * scored.length)].c;
             const myPower = unitPower(myStrongest.units);
             const tgtPower = unitPower(target.units);
-            // Need clear advantage, plus only declare war if not already, with some restraint
             const rel = pairKey(stAttack, empire.id, target.ownerId);
-            if (rel !== "war" && Math.random() > 0.35) continue; // mostly avoid starting fresh wars
-            if (myPower > tgtPower * 1.35) {
-              const send: Units = scaleUnits(myStrongest.units, 0.6);
+            // Strong restraint when not already at war — gradual escalation
+            if (rel !== "war" && Math.random() > 0.12) continue;
+            if (myPower > tgtPower * 1.5) {
+              const send: Units = scaleUnits(myStrongest.units, 0.55);
               if (unitTotal(send) > 0) get().attack(myStrongest.id, target.id, send);
             }
           }
