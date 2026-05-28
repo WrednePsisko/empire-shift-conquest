@@ -533,55 +533,33 @@ export function WorldMap({
       </svg>
 
       {interactive && (
-        <div className="absolute bottom-3 right-3 flex flex-col items-center gap-1.5 z-10">
-          <button
-            type="button"
-            onClick={() => zoomBy(1.5)}
-            className="size-11 rounded-full bg-card/95 border border-border text-foreground hover:bg-accent text-2xl font-bold backdrop-blur shadow-xl active:scale-95 transition-transform"
-            aria-label="Zoom in"
-          >
-            +
-          </button>
-          {/* zoom slider */}
-          <div className="h-32 w-11 rounded-full bg-card/90 border border-border backdrop-blur shadow-lg flex items-center justify-center px-1">
-            <input
-              type="range"
-              min={MIN_SCALE}
-              max={MAX_SCALE}
-              step={0.25}
-              value={view.k}
-              onChange={(e) => {
-                const k = Number(e.target.value);
-                setView((v) => {
-                  const ratio = k / v.k;
-                  const cx = width / 2;
-                  const cy = height / 2;
-                  return clampView({ k, tx: cx - (cx - v.tx) * ratio, ty: cy - (cy - v.ty) * ratio });
-                });
-              }}
-              className="w-28 accent-primary"
-              style={{ writingMode: "vertical-lr" as never, transform: "rotate(180deg)" }}
-              aria-label="Zoom"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => zoomBy(1 / 1.5)}
-            className="size-11 rounded-full bg-card/95 border border-border text-foreground hover:bg-accent text-2xl font-bold backdrop-blur shadow-xl active:scale-95 transition-transform"
-            aria-label="Zoom out"
-          >
-            −
-          </button>
-          <button
-            type="button"
-            onClick={reset}
-            className="size-10 rounded-full bg-card/95 border border-border text-foreground hover:bg-accent text-sm backdrop-blur shadow-lg"
-            aria-label="Reset view"
-          >
-            ⤢
-          </button>
-          <div className="mt-1 px-1.5 py-0.5 rounded-md bg-card/90 border border-border text-[10px] font-mono">
-            {view.k.toFixed(1)}×
+        <div className="absolute top-2 right-2 flex flex-col items-center gap-1 z-10 pointer-events-none">
+          <div className="flex flex-col items-center gap-1 rounded-full bg-card/90 border border-border backdrop-blur shadow-lg p-1 pointer-events-auto">
+            <button
+              type="button"
+              onClick={() => zoomBy(1.6)}
+              className="size-8 rounded-full hover:bg-accent text-lg font-bold leading-none active:scale-95 transition-transform"
+              aria-label="Zoom in"
+            >
+              +
+            </button>
+            <div className="text-[9px] font-mono text-muted-foreground">{view.k.toFixed(1)}×</div>
+            <button
+              type="button"
+              onClick={() => zoomBy(1 / 1.6)}
+              className="size-8 rounded-full hover:bg-accent text-lg font-bold leading-none active:scale-95 transition-transform"
+              aria-label="Zoom out"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              onClick={reset}
+              className="size-7 rounded-full hover:bg-accent text-xs leading-none"
+              aria-label="Reset view"
+            >
+              ⤢
+            </button>
           </div>
         </div>
       )}
