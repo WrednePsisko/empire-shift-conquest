@@ -305,6 +305,47 @@ export function WorldMap({
           <pattern id="landHatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
             <line x1="0" y1="0" x2="0" y2="6" stroke="#000" strokeOpacity="0.05" strokeWidth="0.4" />
           </pattern>
+          {/* Topographic contour overlay — subtle, applied over land */}
+          <pattern id="topoContours" width="60" height="60" patternUnits="userSpaceOnUse">
+            <path d="M0 12 Q15 6 30 12 T60 12" fill="none" stroke="#1a0f08" strokeOpacity="0.18" strokeWidth="0.45" />
+            <path d="M0 28 Q15 22 30 28 T60 28" fill="none" stroke="#1a0f08" strokeOpacity="0.14" strokeWidth="0.45" />
+            <path d="M0 44 Q15 38 30 44 T60 44" fill="none" stroke="#1a0f08" strokeOpacity="0.12" strokeWidth="0.45" />
+            <path d="M0 56 Q15 50 30 56 T60 56" fill="none" stroke="#1a0f08" strokeOpacity="0.16" strokeWidth="0.45" />
+          </pattern>
+          <filter id="topoNoise">
+            <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="2" seed="3" />
+            <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.12 0" />
+            <feComposite in2="SourceGraphic" operator="in" />
+          </filter>
+          {/* Unit-type SVG glyphs (no emoji) */}
+          <symbol id="g_infantry" viewBox="-10 -10 20 20">
+            <path d="M0 -6 L4 -2 L4 6 L-4 6 L-4 -2 Z" fill="currentColor" />
+            <circle cx="0" cy="-6" r="2.2" fill="currentColor" />
+          </symbol>
+          <symbol id="g_tank" viewBox="-10 -10 20 20">
+            <rect x="-7" y="-1" width="14" height="6" rx="1" fill="currentColor" />
+            <rect x="-4" y="-5" width="8" height="4" rx="0.8" fill="currentColor" />
+            <rect x="3" y="-4" width="6" height="1.2" fill="currentColor" />
+          </symbol>
+          <symbol id="g_artillery" viewBox="-10 -10 20 20">
+            <circle cx="-3" cy="3" r="3" fill="currentColor" />
+            <rect x="-2" y="-6" width="11" height="2" rx="0.6" fill="currentColor" transform="rotate(-25 -2 -5)" />
+          </symbol>
+          <symbol id="g_aircraft" viewBox="-10 -10 20 20">
+            <path d="M0 -7 L1.4 -1 L8 1 L1.4 2 L1 7 L-1 7 L-1.4 2 L-8 1 L-1.4 -1 Z" fill="currentColor" />
+          </symbol>
+          <symbol id="g_navy" viewBox="-10 -10 20 20">
+            <path d="M-7 2 L7 2 L5 6 L-5 6 Z" fill="currentColor" />
+            <rect x="-0.6" y="-7" width="1.2" height="9" fill="currentColor" />
+            <path d="M0.6 -6 L6 -1 L0.6 -1 Z" fill="currentColor" />
+          </symbol>
+          <symbol id="g_missile" viewBox="-10 -10 20 20">
+            <path d="M0 -8 L3 -2 L3 6 L-3 6 L-3 -2 Z" fill="currentColor" />
+            <path d="M-3 4 L-6 7 L-3 6 Z M3 4 L6 7 L3 6 Z" fill="currentColor" />
+          </symbol>
+          <symbol id="g_arrow" viewBox="-10 -10 20 20">
+            <path d="M-7 -5 L7 0 L-7 5 L-3 0 Z" fill="currentColor" />
+          </symbol>
         </defs>
         <rect width={width} height={height} fill="url(#ocean)" />
         <rect width={width} height={height} fill="url(#oceanWaves)" />
