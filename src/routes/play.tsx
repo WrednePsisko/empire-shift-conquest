@@ -157,6 +157,8 @@ function Play() {
 
   const selectionOwned = selected?.ownerId === playerEmpireId;
   const relWithTarget = selected && playerEmpireId ? relations[playerEmpireId]?.[selected.ownerId] ?? "neutral" : "neutral";
+  const reachable = selected && target ? canReachCountry(selected, target) : true;
+  const reachBlocked = !!(selected && target && target.ownerId !== playerEmpireId && !reachable);
 
   const handleCountryClick = (id: string) => {
     const country = countries[id];
