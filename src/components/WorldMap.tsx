@@ -522,16 +522,9 @@ export function WorldMap({
                 <g transform={`translate(${x} ${y}) rotate(${angle})`}>
                   <circle r={r * 1.6} fill={mv.color} opacity={0.25} />
                   <circle r={r} fill={mv.color} stroke="#0a0a0a" strokeWidth={1.4 * labelScale} />
-                  <text
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                    fontSize={r * 1.2}
-                    transform={`rotate(${-angle})`}
-                    fill="#0a0a0a"
-                    fontWeight={700}
-                  >
-                    ⚔
-                  </text>
+                  <g style={{ color: "#0a0a0a" }}>
+                    <use href="#g_arrow" width={r * 1.6} height={r * 1.6} x={-r * 0.8} y={-r * 0.8} />
+                  </g>
                 </g>
               </g>
             );
