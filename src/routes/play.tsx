@@ -12,6 +12,7 @@ import {
   type UnitType,
   type Units,
 } from "@/lib/gameStore";
+import { canReachCountry } from "@/lib/gameStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
