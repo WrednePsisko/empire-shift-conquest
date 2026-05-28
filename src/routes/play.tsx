@@ -410,11 +410,17 @@ function Play() {
                       </div>
                     ))}
                   </div>
+                  {reachBlocked && (
+                    <div className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 text-destructive text-[11px] px-2 py-1.5">
+                      No route: needs a shared land border, or both nations must have sea access.
+                    </div>
+                  )}
                   <div className="flex gap-2 mt-2">
                     <Button variant="ghost" className="flex-1 h-10" onClick={() => setTargetId(null)}>Cancel</Button>
                     <Button
                       className="flex-1 h-10"
                       variant={target.ownerId === playerEmpireId ? "default" : "destructive"}
+                      disabled={reachBlocked}
                       onClick={launchAttack}
                     >
                       <Swords className="size-4 mr-1.5" /> {target.ownerId === playerEmpireId ? "Send" : "Attack"}
