@@ -16,7 +16,9 @@ export interface MapMarker {
   id: string;
   label: string;
   color: string;
+  /** Either an emoji/glyph (legacy) or a known unit-type key rendered as an SVG icon */
   icon?: string;
+  iconKey?: "infantry" | "tank" | "artillery" | "aircraft" | "navy" | "missile";
   selectable?: boolean;
   selected?: boolean;
 }
