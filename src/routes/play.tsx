@@ -131,7 +131,7 @@ function Play() {
         id: c.id,
         label: total >= 1000 ? `${Math.floor(total / 1000)}k` : String(total),
         color: empire.color,
-        icon: UNIT_STATS[dominant].icon,
+        iconKey: dominant,
         selectable: isOwn,
         selected: isOwn && selectedId === c.id,
       });
