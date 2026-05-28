@@ -617,6 +617,19 @@ function geoDistance(a: [number, number], b: [number, number]): number {
   return (2 * Math.asin(Math.min(1, Math.sqrt(h))) * 180) / Math.PI;
 }
 
+// Two countries are considered reachable for hostile movement if they share a
+// rough "land border" (centroids within ~14 degrees great-circle) OR both have
+// sea access (so navies can connect them).
+export function canReachCountry(
+  from: { id: string; centroid: [number, number] },
+  to: { id: string; centroid: [number, number] },
+): boolean {
+  if (from.id === to.id) return true;
+  const d = geoDistance(from.centroid, to.centroid);
+  if (d <= 14) return true; // land-neighbor proxy
+  return hasSeaAccess(from.id) && hasSeaAccess(to.id);
+}
+
 function queueProposal(
   set: (fn: (s: GameState) => Partial<GameState>) => void,
   get: () => GameState,
@@ -625,7 +638,6 @@ function queueProposal(
 ) {
   const s = get();
   if (!s.playerEmpireId) return;
-  // Dedupe: don't queue if already a pending proposal from same empire
   if (s.pendingProposals.some((p) => p.fromEmpireId === fromEmpireId && p.kind === kind)) return;
   const proposal: Proposal = {
     id: `p_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -633,12 +645,7 @@ function queueProposal(
     kind,
     createdMs: Date.now(),
   };
-  set((st) => ({
-    pendingProposals: [...st.pendingProposals, proposal],
-    // auto-pause if currently running
-    prevSpeed: st.speed > 0 ? st.speed : st.prevSpeed,
-    speed: 0,
-  }));
+  set((st) => ({ pendingProposals: [...st.pendingProposals, proposal] }));
 }
 
 
