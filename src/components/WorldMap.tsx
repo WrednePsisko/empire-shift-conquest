@@ -200,8 +200,9 @@ export function WorldMap({
   const clampView = useCallback(
     (v: { k: number; tx: number; ty: number }) => {
       const k = Math.max(MIN_SCALE, Math.min(MAX_SCALE, v.k));
-      const maxTx = (width * (k - 1)) / 2 + width * 0.4;
-      const maxTy = (height * (k - 1)) / 2 + height * 0.4;
+      const maxTx = (width * (k - 1)) / 2 + width * 0.9;
+      const maxTy = (height * (k - 1)) / 2 + height * 0.9;
+
       return {
         k,
         tx: Math.max(-maxTx, Math.min(maxTx, v.tx)),
