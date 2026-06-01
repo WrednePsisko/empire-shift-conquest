@@ -222,8 +222,9 @@ function Play() {
         <div className="flex items-center gap-3 text-sm">
           <Stat icon={<Coins className="size-3.5 text-primary" />} value={Math.floor(player.coins).toLocaleString()} sub={`+${income.toFixed(0)}/s`} />
           <Stat icon={<Shield className="size-3.5 text-primary" />} value={totalArmies.toLocaleString()} />
-          <Stat icon={<Crown className="size-3.5 text-primary" />} value={`${owned.length}`} sub={`$${totalGdp.toFixed(1)}T`} />
+          <Stat icon={<Users className="size-3.5 text-primary" />} value={formatPop(totalPop)} sub={`${owned.length} · $${totalGdp.toFixed(1)}T`} />
         </div>
+
         <Button variant="ghost" size="icon" onClick={() => navigate({ to: "/" })} aria-label="Menu">
           <Home className="size-4" />
         </Button>
