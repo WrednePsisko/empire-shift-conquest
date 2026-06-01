@@ -716,6 +716,15 @@ function emptyUnits(): Units {
   return { infantry: 0, tank: 0, artillery: 0, aircraft: 0, navy: 0, missile: 0 };
 }
 
+/** Format population in thousands → "1.4M", "850k", "12.4M", "2.1B". */
+function formatPop(thousands: number): string {
+  if (!isFinite(thousands) || thousands <= 0) return "0";
+  if (thousands >= 1_000_000) return `${(thousands / 1_000_000).toFixed(2)}B`;
+  if (thousands >= 1_000) return `${(thousands / 1_000).toFixed(1)}M`;
+  return `${Math.round(thousands)}k`;
+}
+
+
 function Stat({ icon, value, sub }: { icon: React.ReactNode; value: string; sub?: string }) {
   return (
     <div className="flex flex-col items-end leading-tight">
