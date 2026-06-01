@@ -280,7 +280,7 @@ function Play() {
 
           {/* Selected country panel */}
           {selected && panel === "selected" && (
-            <div className={`absolute bottom-3 left-3 right-3 md:right-auto md:w-[440px] rounded-xl border border-border bg-card/95 backdrop-blur-xl p-3 shadow-2xl overflow-y-auto ${panelCollapsed ? "max-h-[88px]" : "max-h-[48dvh]"}`}>
+            <div className={`absolute bottom-3 left-3 right-auto max-w-[calc(100%-5rem)] md:w-[440px] rounded-xl border border-border bg-card/95 backdrop-blur-xl p-3 shadow-2xl overflow-y-auto ${panelCollapsed ? "max-h-[88px]" : "max-h-[48dvh]"}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Selected</div>
@@ -295,9 +295,10 @@ function Play() {
                     )}
                   </div>
                   <div className="text-[11px] text-muted-foreground truncate">
-                    {empires[selected.ownerId]?.name} · ${selected.gdpT.toFixed(2)}T · {(selected.gdpT * INCOME_PER_GDP_T).toFixed(0)}/s
+                    {empires[selected.ownerId]?.name} · ${selected.gdpT.toFixed(2)}T · {(selected.gdpT * INCOME_PER_GDP_T).toFixed(0)}/s · 👥 {formatPop(selected.population)}
                   </div>
                 </div>
+
                 <div className="flex gap-1 shrink-0">
                   <Button size="sm" variant="outline" className="h-8 px-2" onClick={() => setPanelCollapsed((v) => !v)}>
                     {panelCollapsed ? "Expand" : "Collapse"}
