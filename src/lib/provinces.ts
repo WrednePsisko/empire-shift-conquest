@@ -4,20 +4,17 @@ export interface Province {
   id: string;
   countryId: string;
   index: number;
-  /** SVG path string for the Voronoi cell (already in projected pixel space). */
+  /** SVG path string for the Voronoi cell (projected pixel space, may extend
+   *  outside the country — render with a clipPath set to the country path). */
   d: string;
-  /** Projected pixel centroid. */
   cx: number;
   cy: number;
   /** Population in thousands. */
   population: number;
   /** Economy (GDP share) in billions USD. */
   economy: number;
-  /** 0..1 density proxy (higher = more populated). */
-  density: number;
 }
 
-// Seeded mulberry32 RNG for deterministic generation per-country.
 function mulberry32(seed: number) {
   let t = seed >>> 0;
   return () => {
@@ -37,83 +34,59 @@ function hashSeed(s: string): number {
 
 interface BBox { minX: number; minY: number; maxX: number; maxY: number }
 
-/** Sample N points whose density falls off near the polygon boundary, so sparse
- *  border regions naturally get bigger Voronoi cells. */
-function samplePoints(
-  bbox: BBox,
-  containsPoint: (x: number, y: number) => boolean,
-  count: number,
-  rng: () => number,
-): [number, number][] {
-  const out: [number, number][] = [];
-  const target = count;
-  const maxTries = count * 60;
-  let tries = 0;
-  while (out.length < target && tries < maxTries) {
-    tries++;
-    const x = bbox.minX + rng() * (bbox.maxX - bbox.minX);
-    const y = bbox.minY + rng() * (bbox.maxY - bbox.minY);
-    if (!containsPoint(x, y)) continue;
-    // Lloyd-ish acceptance bias: prefer points away from already-placed neighbors
-    let ok = true;
-    const minDist = Math.min(bbox.maxX - bbox.minX, bbox.maxY - bbox.minY) / (Math.sqrt(target) * 2.2);
-    for (const p of out) {
-      const dx = p[0] - x, dy = p[1] - y;
-      if (dx * dx + dy * dy < minDist * minDist) { ok = false; break; }
-    }
-    if (ok) out.push([x, y]);
-  }
-  // Fill remainder without spacing constraint
-  while (out.length < target && tries < maxTries * 2) {
-    tries++;
-    const x = bbox.minX + rng() * (bbox.maxX - bbox.minX);
-    const y = bbox.minY + rng() * (bbox.maxY - bbox.minY);
-    if (containsPoint(x, y)) out.push([x, y]);
-  }
-  return out;
+export function provinceCountFor(pixelArea: number): number {
+  const n = Math.round(Math.sqrt(Math.max(1, pixelArea)) / 14);
+  return Math.max(1, Math.min(14, n));
 }
 
 export interface ProvinceGenInput {
   countryId: string;
   bbox: BBox;
-  containsPoint: (x: number, y: number) => boolean;
-  /** Pixel area of country (used for province count). */
+  /** Approximate visible pixel area (used to pick province count). */
   pixelArea: number;
-  /** Country totals to distribute. */
   totalPopulation: number; // in thousands
   totalEconomy: number;    // in billions USD
 }
 
-/** Choose province count from country area: small countries 1-3, large up to 14. */
-export function provinceCountFor(pixelArea: number): number {
-  const n = Math.round(Math.sqrt(pixelArea) / 18);
-  return Math.max(1, Math.min(14, n));
-}
-
 export function generateProvinces(input: ProvinceGenInput): Province[] {
-  const { countryId, bbox, containsPoint, pixelArea, totalPopulation, totalEconomy } = input;
+  const { countryId, bbox, pixelArea, totalPopulation, totalEconomy } = input;
   const rng = mulberry32(hashSeed(countryId));
   const n = provinceCountFor(pixelArea);
-  const pts = samplePoints(bbox, containsPoint, n, rng);
+
+  const w = Math.max(1, bbox.maxX - bbox.minX);
+  const h = Math.max(1, bbox.maxY - bbox.minY);
+  const cx0 = (bbox.minX + bbox.maxX) / 2;
+  const cy0 = (bbox.minY + bbox.maxY) / 2;
+
+  // Generate jittered grid points for stable cell sizes
+  const cols = Math.max(1, Math.round(Math.sqrt(n * (w / h))));
+  const rows = Math.max(1, Math.ceil(n / cols));
+  const pts: [number, number][] = [];
+  for (let r = 0; r < rows && pts.length < n; r++) {
+    for (let c = 0; c < cols && pts.length < n; c++) {
+      const jx = (rng() - 0.5) * (w / cols) * 0.6;
+      const jy = (rng() - 0.5) * (h / rows) * 0.6;
+      pts.push([
+        bbox.minX + ((c + 0.5) * w) / cols + jx,
+        bbox.minY + ((r + 0.5) * h) / rows + jy,
+      ]);
+    }
+  }
   if (pts.length === 0) return [];
 
-  const padX = (bbox.maxX - bbox.minX) * 0.05 + 2;
-  const padY = (bbox.maxY - bbox.minY) * 0.05 + 2;
+  const padX = w * 0.15 + 4;
+  const padY = h * 0.15 + 4;
   const delaunay = Delaunay.from(pts);
   const voronoi = delaunay.voronoi([
     bbox.minX - padX, bbox.minY - padY, bbox.maxX + padX, bbox.maxY + padY,
   ]);
 
-  // Density proxy: prefer cells closer to country centroid
-  const cx0 = (bbox.minX + bbox.maxX) / 2;
-  const cy0 = (bbox.minY + bbox.maxY) / 2;
-  const span = Math.hypot(bbox.maxX - bbox.minX, bbox.maxY - bbox.minY);
-
+  const span = Math.hypot(w, h);
   const raw = pts.map((p, i) => {
     const d = voronoi.renderCell(i) ?? "";
     const dist = Math.hypot(p[0] - cx0, p[1] - cy0);
     const centralBias = 1 - Math.min(1, dist / (span * 0.55));
-    const density = 0.25 + centralBias * 0.6 + rng() * 0.4; // 0.25..~1.25
+    const density = 0.25 + centralBias * 0.6 + rng() * 0.4;
     return { i, p, d, density };
   });
   const totalDensity = raw.reduce((s, r) => s + r.density, 0) || 1;
@@ -131,7 +104,19 @@ export function generateProvinces(input: ProvinceGenInput): Province[] {
         cy: r.p[1],
         population: Math.round(totalPopulation * share),
         economy: Math.round(totalEconomy * share * 100) / 100,
-        density: r.density,
       };
     });
 }
+
+const PROVINCE_CACHE = new Map<string, Province[]>();
+
+export function getOrGenerateProvinces(input: ProvinceGenInput): Province[] {
+  const key = `${input.countryId}:${Math.round(input.bbox.minX)}:${Math.round(input.bbox.minY)}:${Math.round(input.bbox.maxX)}:${Math.round(input.bbox.maxY)}:${Math.round(input.totalPopulation)}`;
+  const cached = PROVINCE_CACHE.get(key);
+  if (cached) return cached;
+  const next = generateProvinces(input);
+  PROVINCE_CACHE.set(key, next);
+  return next;
+}
+
+export function clearProvinceCache() { PROVINCE_CACHE.clear(); }
