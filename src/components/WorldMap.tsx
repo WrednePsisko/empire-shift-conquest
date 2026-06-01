@@ -470,6 +470,64 @@ export function WorldMap({
               );
             })}
           </g>
+
+          {/* ClipPaths per country (used by hypsometric + provinces) */}
+          <defs>
+            {features?.map((f) => {
+              const id = String(Number(f.id));
+              const d = path(f) ?? "";
+              return (
+                <clipPath key={`cc-${id}`} id={`cc-${id}`}>
+                  <path d={d} />
+                </clipPath>
+              );
+            })}
+          </defs>
+
+          {/* Hypsometric elevation overlay, clipped to each country */}
+          {showHypsometric && features?.map((f) => {
+            const id = String(Number(f.id));
+            const b = countryBounds.get(id);
+            if (!b) return null;
+            const [[minX, minY], [maxX, maxY]] = b;
+            return (
+              <g key={`hy-${id}`} clipPath={`url(#cc-${id})`} pointerEvents="none" opacity={0.42} style={{ mixBlendMode: "overlay" }}>
+                <rect x={minX} y={minY} width={maxX - minX} height={maxY - minY} fill="#888" filter="url(#hypsoFill)" />
+              </g>
+            );
+          })}
+
+          {/* Province cells — only visible when zoomed in */}
+          {showProvinces && view.k >= 2.5 && features?.map((f) => {
+            const id = String(Number(f.id));
+            const provs = provincesByCountry.get(id);
+            if (!provs || provs.length <= 1) return null;
+            return (
+              <g key={`pv-${id}`} clipPath={`url(#cc-${id})`}>
+                {provs.map((p) => {
+                  const isSel = selectedProvinceId === p.id;
+                  return (
+                    <path
+                      key={p.id}
+                      d={p.d}
+                      fill={isSel ? "rgba(251,191,36,0.18)" : "transparent"}
+                      stroke={isSel ? "#fbbf24" : "rgba(8,12,20,0.55)"}
+                      strokeWidth={(isSel ? 1.4 : 0.6) / view.k}
+                      strokeDasharray={isSel ? undefined : `${1.6 / view.k} ${1.2 / view.k}`}
+                      style={{ cursor: onProvinceClick ? "pointer" : "inherit" }}
+                      onClick={(e) => {
+                        if (movedRef.current) return;
+                        e.stopPropagation();
+                        onProvinceClick?.(id, p);
+                      }}
+                    />
+                  );
+                })}
+              </g>
+            );
+          })}
+
+
           {showLabels && features?.map((f) => {
             const id = String(Number(f.id));
             const c = path.centroid(f);
