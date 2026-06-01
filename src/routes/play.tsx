@@ -450,17 +450,35 @@ function Play() {
                       No route: needs a shared land border, or both nations must have sea access.
                     </div>
                   )}
-                  <div className="flex gap-2 mt-2">
-                    <Button variant="ghost" className="flex-1 h-10" onClick={() => setTargetId(null)}>Cancel</Button>
-                    <Button
-                      className="flex-1 h-10"
-                      variant={target.ownerId === playerEmpireId ? "default" : "destructive"}
-                      disabled={reachBlocked}
-                      onClick={launchAttack}
-                    >
-                      <Swords className="size-4 mr-1.5" /> {target.ownerId === playerEmpireId ? "Send" : "Attack"}
-                    </Button>
-                  </div>
+                  {(() => {
+                    const isReinforce = target.ownerId === playerEmpireId;
+                    const targetRel = relations[playerEmpireId!]?.[target.ownerId] ?? "neutral";
+                    const needsWar = !isReinforce && targetRel !== "war";
+                    return (
+                      <div className="flex gap-2 mt-2">
+                        <Button variant="ghost" className="flex-1 h-10" onClick={() => setTargetId(null)}>Cancel</Button>
+                        {needsWar ? (
+                          <Button
+                            className="flex-1 h-10"
+                            variant="destructive"
+                            onClick={() => declareWar(target.ownerId)}
+                          >
+                            <Flag className="size-4 mr-1.5" /> Declare War
+                          </Button>
+                        ) : (
+                          <Button
+                            className="flex-1 h-10"
+                            variant={isReinforce ? "default" : "destructive"}
+                            disabled={reachBlocked}
+                            onClick={launchAttack}
+                          >
+                            <Swords className="size-4 mr-1.5" /> {isReinforce ? "Send" : "Attack"}
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                 </div>
               )}
                 </>
