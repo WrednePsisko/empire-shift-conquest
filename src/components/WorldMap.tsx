@@ -106,7 +106,7 @@ export function WorldMap({
       .then((topo: Topology) => {
         if (cancelled) return;
         const fc = feature(topo, topo.objects.countries) as unknown as FeatureCollection<Geometry, { name: string }>;
-        setFeatures(fc.features.filter((f) => isPlayableCountry(String(Number(f.id)))));
+        setFeatures(fc.features.filter((f) => isFinite(Number(f.id)) && isPlayableCountry(String(Number(f.id)))));
       })
       .catch((e) => console.error("map load failed", e));
     return () => {
