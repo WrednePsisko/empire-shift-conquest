@@ -367,6 +367,26 @@ export function WorldMap({
             <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.12 0" />
             <feComposite in2="SourceGraphic" operator="in" />
           </filter>
+          {/* Hypsometric (elevation) overlay: procedural noise mapped to a
+              lowland→highland→peak color ramp, blended over land fills. */}
+          <linearGradient id="hypsoRamp" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#2f5d34" />
+            <stop offset="0.25" stopColor="#6b8e3c" />
+            <stop offset="0.5" stopColor="#c2a86a" />
+            <stop offset="0.75" stopColor="#8a5a3b" />
+            <stop offset="1" stopColor="#f5f0e6" />
+          </linearGradient>
+          <filter id="hypsoFill" x="0" y="0" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="4" seed="11" result="noise" />
+            <feComponentTransfer in="noise" result="elevation">
+              <feFuncR type="table" tableValues="0.18 0.32 0.42 0.55 0.72 0.95" />
+              <feFuncG type="table" tableValues="0.36 0.55 0.62 0.55 0.50 0.95" />
+              <feFuncB type="table" tableValues="0.20 0.24 0.32 0.32 0.42 0.96" />
+              <feFuncA type="linear" slope="1" />
+            </feComponentTransfer>
+            <feComposite in2="SourceGraphic" operator="in" />
+          </filter>
+
           {/* Unit-type SVG glyphs (no emoji) */}
           <symbol id="g_infantry" viewBox="-10 -10 20 20">
             <path d="M0 -6 L4 -2 L4 6 L-4 6 L-4 -2 Z" fill="currentColor" />
