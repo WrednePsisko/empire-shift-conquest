@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { hasSeaAccess } from "./countryData";
+import { hasSeaAccess, getPopulation } from "./countryData";
 
 export type UnitType = "infantry" | "tank" | "artillery" | "aircraft" | "navy" | "missile";
 
@@ -56,7 +56,10 @@ export interface Country {
   ownerId: string;
   units: Units;
   centroid: [number, number]; // [lon, lat]
+  /** Population in thousands. */
+  population: number;
 }
+
 
 export interface Movement {
   id: string;
@@ -189,8 +192,11 @@ export const useGame = create<GameState>()(
             ownerId: empireId,
             units: seedUnits(c.gdpT),
             centroid: c.centroid,
+            population: Math.round(getPopulation(c.id) * 1000),
           };
         }
+
+
 
         if (countries[playerCountryId]) {
           countries[playerCountryId].units = {
@@ -567,7 +573,7 @@ export const useGame = create<GameState>()(
       },
     }),
     {
-      name: "empire-shift-save-v5",
+      name: "empire-shift-save-v6",
       partialize: (s) => ({
         initialized: s.initialized,
         countries: s.countries,
