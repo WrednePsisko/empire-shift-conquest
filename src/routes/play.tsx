@@ -323,6 +323,40 @@ function Play() {
                     Total power <span className="font-mono text-foreground">{unitPower(selected.units)}</span>
                   </div>
 
+              {/* Diplomacy actions on foreign countries */}
+              {!selectionOwned && (
+                <div className="mt-3 border-t border-border pt-2 flex flex-wrap gap-1.5">
+                  {relWithTarget === "neutral" && (
+                    <>
+                      <Button size="sm" variant="destructive" className="h-8" onClick={() => declareWar(selected.ownerId)}>
+                        <Flag className="size-3.5 mr-1" /> Declare War
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-8" onClick={() => proposeAlliance(selected.ownerId)}>
+                        <Handshake className="size-3.5 mr-1" /> Propose Alliance
+                      </Button>
+                    </>
+                  )}
+                  {relWithTarget === "war" && (
+                    <>
+                      <span className="inline-flex items-center text-[11px] text-destructive font-semibold uppercase tracking-wider px-1.5">⚔ At War</span>
+                      <Button size="sm" variant="outline" className="h-8 ml-auto" onClick={() => makePeace(selected.ownerId)}>
+                        <Handshake className="size-3.5 mr-1" /> Sue for Peace
+                      </Button>
+                    </>
+                  )}
+                  {relWithTarget === "ally" && (
+                    <>
+                      <span className="inline-flex items-center text-[11px] text-emerald-400 font-semibold uppercase tracking-wider px-1.5">🤝 Allied</span>
+                      <Button size="sm" variant="outline" className="h-8 ml-auto" onClick={() => breakAlliance(selected.ownerId)}>
+                        Break Alliance
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+
+
+
 
               {selectionOwned && !target && (
                 <div className="mt-3 border-t border-border pt-2 space-y-1.5">
