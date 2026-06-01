@@ -492,7 +492,7 @@ function Play() {
 
           {/* Diplomacy panel */}
           {panel === "diplomacy" && (
-            <div className="absolute bottom-3 left-3 right-3 md:right-auto md:w-[440px] rounded-xl border border-border bg-card/95 backdrop-blur-xl p-3 shadow-2xl max-h-[65dvh] overflow-y-auto">
+            <div className="absolute bottom-3 left-3 right-auto max-w-[calc(100%-5rem)] md:w-[440px] rounded-xl border border-border bg-card/95 backdrop-blur-xl p-3 shadow-2xl max-h-[65dvh] overflow-y-auto">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm font-semibold flex items-center gap-2">
                   <Handshake className="size-4 text-primary" /> Diplomatic Relations
@@ -550,7 +550,7 @@ function Play() {
 
           {/* Log panel */}
           {panel === "log" && (
-            <div className="absolute bottom-3 left-3 right-3 md:right-auto md:w-[440px] rounded-xl border border-border bg-card/95 backdrop-blur-xl p-3 shadow-2xl max-h-[55dvh] overflow-y-auto">
+            <div className="absolute bottom-3 left-3 right-auto max-w-[calc(100%-5rem)] md:w-[440px] rounded-xl border border-border bg-card/95 backdrop-blur-xl p-3 shadow-2xl max-h-[55dvh] overflow-y-auto">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm font-semibold">War Log</div>
                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setPanel("selected")}>
