@@ -3,7 +3,9 @@ import { geoNaturalEarth1, geoPath, geoCentroid } from "d3-geo";
 import { feature } from "topojson-client";
 import type { Topology } from "topojson-specification";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { getGdp, isPlayableCountry } from "@/lib/countryData";
+import { getGdp, getPopulation, isPlayableCountry } from "@/lib/countryData";
+import { getOrGenerateProvinces, type Province } from "@/lib/provinces";
+
 
 export interface MapCountry {
   id: string;
@@ -42,10 +44,12 @@ export interface MapViewTarget {
 interface Props {
   onCountryClick?: (c: MapCountry) => void;
   onMarkerClick?: (id: string) => void;
+  onProvinceClick?: (countryId: string, province: Province) => void;
   fillFor?: (id: string) => string | undefined;
   strokeFor?: (id: string) => string | undefined;
   selectedId?: string | null;
   highlightId?: string | null;
+  selectedProvinceId?: string | null;
   onCountriesLoaded?: (countries: MapCountry[]) => void;
   width?: number;
   height?: number;
@@ -54,7 +58,10 @@ interface Props {
   movements?: MapMovement[];
   focusOn?: MapViewTarget | null;
   interactive?: boolean;
+  showProvinces?: boolean;
+  showHypsometric?: boolean;
 }
+
 
 
 const TOPO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
@@ -64,10 +71,12 @@ const MAX_SCALE = 40;
 export function WorldMap({
   onCountryClick,
   onMarkerClick,
+  onProvinceClick,
   fillFor,
   strokeFor,
   selectedId,
   highlightId,
+  selectedProvinceId,
   onCountriesLoaded,
   width = 960,
   height = 500,
@@ -76,7 +85,10 @@ export function WorldMap({
   movements,
   focusOn,
   interactive = true,
+  showProvinces = true,
+  showHypsometric = true,
 }: Props) {
+
 
   const [features, setFeatures] = useState<Feature<Geometry, { name: string }>[] | null>(null);
   const loadedRef = useRef(false);
