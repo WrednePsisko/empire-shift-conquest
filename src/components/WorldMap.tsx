@@ -137,6 +137,43 @@ export function WorldMap({
     return m;
   }, [features]);
 
+  // Precompute projected bounds per country (for province generation)
+  const countryBounds = useMemo(() => {
+    const m = new Map<string, [[number, number], [number, number]]>();
+    if (!features) return m;
+    for (const f of features) {
+      const id = String(Number(f.id));
+      const b = path.bounds(f);
+      if (isFinite(b[0][0])) m.set(id, b as [[number, number], [number, number]]);
+    }
+    return m;
+  }, [features, path]);
+
+  // Generate provinces per country (memoized via cache in provinces.ts)
+  const provincesByCountry = useMemo(() => {
+    const m = new Map<string, Province[]>();
+    if (!features) return m;
+    for (const f of features) {
+      const id = String(Number(f.id));
+      const b = countryBounds.get(id);
+      if (!b) continue;
+      const [[minX, minY], [maxX, maxY]] = b;
+      const w = maxX - minX, h = maxY - minY;
+      const pixelArea = w * h;
+      const pop = getPopulation(id) * 1000; // thousands
+      const econ = getGdp(id) * 1000;       // billions
+      m.set(id, getOrGenerateProvinces({
+        countryId: id,
+        bbox: { minX, minY, maxX, maxY },
+        pixelArea,
+        totalPopulation: pop,
+        totalEconomy: econ,
+      }));
+    }
+    return m;
+  }, [features, countryBounds]);
+
+
   // rAF for movement animations
   useEffect(() => {
     if (!movements || movements.length === 0) return;
