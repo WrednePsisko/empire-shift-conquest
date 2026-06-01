@@ -90,6 +90,8 @@ function Play() {
   const income = owned.reduce((sum, c) => sum + c.gdpT * INCOME_PER_GDP_T, 0);
   const totalArmies = owned.reduce((s, c) => s + unitTotal(c.units), 0);
   const totalGdp = owned.reduce((s, c) => s + c.gdpT, 0);
+  const totalPop = owned.reduce((s, c) => s + (c.population ?? 0), 0);
+
 
   const selected = selectedId ? countries[selectedId] : null;
   const target = targetId ? countries[targetId] : null;
@@ -220,8 +222,9 @@ function Play() {
         <div className="flex items-center gap-3 text-sm">
           <Stat icon={<Coins className="size-3.5 text-primary" />} value={Math.floor(player.coins).toLocaleString()} sub={`+${income.toFixed(0)}/s`} />
           <Stat icon={<Shield className="size-3.5 text-primary" />} value={totalArmies.toLocaleString()} />
-          <Stat icon={<Crown className="size-3.5 text-primary" />} value={`${owned.length}`} sub={`$${totalGdp.toFixed(1)}T`} />
+          <Stat icon={<Users className="size-3.5 text-primary" />} value={formatPop(totalPop)} sub={`${owned.length} · $${totalGdp.toFixed(1)}T`} />
         </div>
+
         <Button variant="ghost" size="icon" onClick={() => navigate({ to: "/" })} aria-label="Menu">
           <Home className="size-4" />
         </Button>
@@ -280,7 +283,7 @@ function Play() {
 
           {/* Selected country panel */}
           {selected && panel === "selected" && (
-            <div className={`absolute bottom-3 left-3 right-3 md:right-auto md:w-[440px] rounded-xl border border-border bg-card/95 backdrop-blur-xl p-3 shadow-2xl overflow-y-auto ${panelCollapsed ? "max-h-[88px]" : "max-h-[48dvh]"}`}>
+            <div className={`absolute bottom-3 left-3 right-auto max-w-[calc(100%-5rem)] md:w-[440px] rounded-xl border border-border bg-card/95 backdrop-blur-xl p-3 shadow-2xl overflow-y-auto ${panelCollapsed ? "max-h-[88px]" : "max-h-[48dvh]"}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Selected</div>
@@ -295,9 +298,10 @@ function Play() {
                     )}
                   </div>
                   <div className="text-[11px] text-muted-foreground truncate">
-                    {empires[selected.ownerId]?.name} · ${selected.gdpT.toFixed(2)}T · {(selected.gdpT * INCOME_PER_GDP_T).toFixed(0)}/s
+                    {empires[selected.ownerId]?.name} · ${selected.gdpT.toFixed(2)}T · {(selected.gdpT * INCOME_PER_GDP_T).toFixed(0)}/s · 👥 {formatPop(selected.population)}
                   </div>
                 </div>
+
                 <div className="flex gap-1 shrink-0">
                   <Button size="sm" variant="outline" className="h-8 px-2" onClick={() => setPanelCollapsed((v) => !v)}>
                     {panelCollapsed ? "Expand" : "Collapse"}
@@ -321,6 +325,40 @@ function Play() {
                   <div className="text-center text-[10px] text-muted-foreground mt-1">
                     Total power <span className="font-mono text-foreground">{unitPower(selected.units)}</span>
                   </div>
+
+              {/* Diplomacy actions on foreign countries */}
+              {!selectionOwned && (
+                <div className="mt-3 border-t border-border pt-2 flex flex-wrap gap-1.5">
+                  {relWithTarget === "neutral" && (
+                    <>
+                      <Button size="sm" variant="destructive" className="h-8" onClick={() => declareWar(selected.ownerId)}>
+                        <Flag className="size-3.5 mr-1" /> Declare War
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-8" onClick={() => proposeAlliance(selected.ownerId)}>
+                        <Handshake className="size-3.5 mr-1" /> Propose Alliance
+                      </Button>
+                    </>
+                  )}
+                  {relWithTarget === "war" && (
+                    <>
+                      <span className="inline-flex items-center text-[11px] text-destructive font-semibold uppercase tracking-wider px-1.5">⚔ At War</span>
+                      <Button size="sm" variant="outline" className="h-8 ml-auto" onClick={() => makePeace(selected.ownerId)}>
+                        <Handshake className="size-3.5 mr-1" /> Sue for Peace
+                      </Button>
+                    </>
+                  )}
+                  {relWithTarget === "ally" && (
+                    <>
+                      <span className="inline-flex items-center text-[11px] text-emerald-400 font-semibold uppercase tracking-wider px-1.5">🤝 Allied</span>
+                      <Button size="sm" variant="outline" className="h-8 ml-auto" onClick={() => breakAlliance(selected.ownerId)}>
+                        Break Alliance
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+
+
 
 
               {selectionOwned && !target && (
@@ -415,17 +453,35 @@ function Play() {
                       No route: needs a shared land border, or both nations must have sea access.
                     </div>
                   )}
-                  <div className="flex gap-2 mt-2">
-                    <Button variant="ghost" className="flex-1 h-10" onClick={() => setTargetId(null)}>Cancel</Button>
-                    <Button
-                      className="flex-1 h-10"
-                      variant={target.ownerId === playerEmpireId ? "default" : "destructive"}
-                      disabled={reachBlocked}
-                      onClick={launchAttack}
-                    >
-                      <Swords className="size-4 mr-1.5" /> {target.ownerId === playerEmpireId ? "Send" : "Attack"}
-                    </Button>
-                  </div>
+                  {(() => {
+                    const isReinforce = target.ownerId === playerEmpireId;
+                    const targetRel = relations[playerEmpireId!]?.[target.ownerId] ?? "neutral";
+                    const needsWar = !isReinforce && targetRel !== "war";
+                    return (
+                      <div className="flex gap-2 mt-2">
+                        <Button variant="ghost" className="flex-1 h-10" onClick={() => setTargetId(null)}>Cancel</Button>
+                        {needsWar ? (
+                          <Button
+                            className="flex-1 h-10"
+                            variant="destructive"
+                            onClick={() => declareWar(target.ownerId)}
+                          >
+                            <Flag className="size-4 mr-1.5" /> Declare War
+                          </Button>
+                        ) : (
+                          <Button
+                            className="flex-1 h-10"
+                            variant={isReinforce ? "default" : "destructive"}
+                            disabled={reachBlocked}
+                            onClick={launchAttack}
+                          >
+                            <Swords className="size-4 mr-1.5" /> {isReinforce ? "Send" : "Attack"}
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                 </div>
               )}
                 </>
@@ -436,7 +492,7 @@ function Play() {
 
           {/* Diplomacy panel */}
           {panel === "diplomacy" && (
-            <div className="absolute bottom-3 left-3 right-3 md:right-auto md:w-[440px] rounded-xl border border-border bg-card/95 backdrop-blur-xl p-3 shadow-2xl max-h-[65dvh] overflow-y-auto">
+            <div className="absolute bottom-3 left-3 right-auto max-w-[calc(100%-5rem)] md:w-[440px] rounded-xl border border-border bg-card/95 backdrop-blur-xl p-3 shadow-2xl max-h-[65dvh] overflow-y-auto">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm font-semibold flex items-center gap-2">
                   <Handshake className="size-4 text-primary" /> Diplomatic Relations
@@ -494,7 +550,7 @@ function Play() {
 
           {/* Log panel */}
           {panel === "log" && (
-            <div className="absolute bottom-3 left-3 right-3 md:right-auto md:w-[440px] rounded-xl border border-border bg-card/95 backdrop-blur-xl p-3 shadow-2xl max-h-[55dvh] overflow-y-auto">
+            <div className="absolute bottom-3 left-3 right-auto max-w-[calc(100%-5rem)] md:w-[440px] rounded-xl border border-border bg-card/95 backdrop-blur-xl p-3 shadow-2xl max-h-[55dvh] overflow-y-auto">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm font-semibold">War Log</div>
                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setPanel("selected")}>
@@ -659,6 +715,15 @@ function CustomBuyPopover({
 function emptyUnits(): Units {
   return { infantry: 0, tank: 0, artillery: 0, aircraft: 0, navy: 0, missile: 0 };
 }
+
+/** Format population in thousands → "1.4M", "850k", "12.4M", "2.1B". */
+function formatPop(thousands: number): string {
+  if (!isFinite(thousands) || thousands <= 0) return "0";
+  if (thousands >= 1_000_000) return `${(thousands / 1_000_000).toFixed(2)}B`;
+  if (thousands >= 1_000) return `${(thousands / 1_000).toFixed(1)}M`;
+  return `${Math.round(thousands)}k`;
+}
+
 
 function Stat({ icon, value, sub }: { icon: React.ReactNode; value: string; sub?: string }) {
   return (

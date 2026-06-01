@@ -3,7 +3,9 @@ import { geoNaturalEarth1, geoPath, geoCentroid } from "d3-geo";
 import { feature } from "topojson-client";
 import type { Topology } from "topojson-specification";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { getGdp, isPlayableCountry } from "@/lib/countryData";
+import { getGdp, getPopulation, isPlayableCountry } from "@/lib/countryData";
+import { getOrGenerateProvinces, type Province } from "@/lib/provinces";
+
 
 export interface MapCountry {
   id: string;
@@ -42,10 +44,12 @@ export interface MapViewTarget {
 interface Props {
   onCountryClick?: (c: MapCountry) => void;
   onMarkerClick?: (id: string) => void;
+  onProvinceClick?: (countryId: string, province: Province) => void;
   fillFor?: (id: string) => string | undefined;
   strokeFor?: (id: string) => string | undefined;
   selectedId?: string | null;
   highlightId?: string | null;
+  selectedProvinceId?: string | null;
   onCountriesLoaded?: (countries: MapCountry[]) => void;
   width?: number;
   height?: number;
@@ -54,7 +58,10 @@ interface Props {
   movements?: MapMovement[];
   focusOn?: MapViewTarget | null;
   interactive?: boolean;
+  showProvinces?: boolean;
+  showHypsometric?: boolean;
 }
+
 
 
 const TOPO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
@@ -64,10 +71,12 @@ const MAX_SCALE = 40;
 export function WorldMap({
   onCountryClick,
   onMarkerClick,
+  onProvinceClick,
   fillFor,
   strokeFor,
   selectedId,
   highlightId,
+  selectedProvinceId,
   onCountriesLoaded,
   width = 960,
   height = 500,
@@ -76,7 +85,10 @@ export function WorldMap({
   movements,
   focusOn,
   interactive = true,
+  showProvinces = true,
+  showHypsometric = true,
 }: Props) {
+
 
   const [features, setFeatures] = useState<Feature<Geometry, { name: string }>[] | null>(null);
   const loadedRef = useRef(false);
@@ -94,7 +106,7 @@ export function WorldMap({
       .then((topo: Topology) => {
         if (cancelled) return;
         const fc = feature(topo, topo.objects.countries) as unknown as FeatureCollection<Geometry, { name: string }>;
-        setFeatures(fc.features.filter((f) => isPlayableCountry(String(Number(f.id)))));
+        setFeatures(fc.features.filter((f) => isFinite(Number(f.id)) && isPlayableCountry(String(Number(f.id)))));
       })
       .catch((e) => console.error("map load failed", e));
     return () => {
@@ -125,6 +137,43 @@ export function WorldMap({
     return m;
   }, [features]);
 
+  // Precompute projected bounds per country (for province generation)
+  const countryBounds = useMemo(() => {
+    const m = new Map<string, [[number, number], [number, number]]>();
+    if (!features) return m;
+    for (const f of features) {
+      const id = String(Number(f.id));
+      const b = path.bounds(f);
+      if (isFinite(b[0][0])) m.set(id, b as [[number, number], [number, number]]);
+    }
+    return m;
+  }, [features, path]);
+
+  // Generate provinces per country (memoized via cache in provinces.ts)
+  const provincesByCountry = useMemo(() => {
+    const m = new Map<string, Province[]>();
+    if (!features) return m;
+    for (const f of features) {
+      const id = String(Number(f.id));
+      const b = countryBounds.get(id);
+      if (!b) continue;
+      const [[minX, minY], [maxX, maxY]] = b;
+      const w = maxX - minX, h = maxY - minY;
+      const pixelArea = w * h;
+      const pop = getPopulation(id) * 1000; // thousands
+      const econ = getGdp(id) * 1000;       // billions
+      m.set(id, getOrGenerateProvinces({
+        countryId: id,
+        bbox: { minX, minY, maxX, maxY },
+        pixelArea,
+        totalPopulation: pop,
+        totalEconomy: econ,
+      }));
+    }
+    return m;
+  }, [features, countryBounds]);
+
+
   // rAF for movement animations
   useEffect(() => {
     if (!movements || movements.length === 0) return;
@@ -151,8 +200,9 @@ export function WorldMap({
   const clampView = useCallback(
     (v: { k: number; tx: number; ty: number }) => {
       const k = Math.max(MIN_SCALE, Math.min(MAX_SCALE, v.k));
-      const maxTx = (width * (k - 1)) / 2 + width * 0.4;
-      const maxTy = (height * (k - 1)) / 2 + height * 0.4;
+      const maxTx = (width * (k - 1)) / 2 + width * 0.9;
+      const maxTy = (height * (k - 1)) / 2 + height * 0.9;
+
       return {
         k,
         tx: Math.max(-maxTx, Math.min(maxTx, v.tx)),
@@ -317,6 +367,26 @@ export function WorldMap({
             <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.12 0" />
             <feComposite in2="SourceGraphic" operator="in" />
           </filter>
+          {/* Hypsometric (elevation) overlay: procedural noise mapped to a
+              lowland→highland→peak color ramp, blended over land fills. */}
+          <linearGradient id="hypsoRamp" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#2f5d34" />
+            <stop offset="0.25" stopColor="#6b8e3c" />
+            <stop offset="0.5" stopColor="#c2a86a" />
+            <stop offset="0.75" stopColor="#8a5a3b" />
+            <stop offset="1" stopColor="#f5f0e6" />
+          </linearGradient>
+          <filter id="hypsoFill" x="0" y="0" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="4" seed="11" result="noise" />
+            <feComponentTransfer in="noise" result="elevation">
+              <feFuncR type="table" tableValues="0.18 0.32 0.42 0.55 0.72 0.95" />
+              <feFuncG type="table" tableValues="0.36 0.55 0.62 0.55 0.50 0.95" />
+              <feFuncB type="table" tableValues="0.20 0.24 0.32 0.32 0.42 0.96" />
+              <feFuncA type="linear" slope="1" />
+            </feComponentTransfer>
+            <feComposite in2="SourceGraphic" operator="in" />
+          </filter>
+
           {/* Unit-type SVG glyphs (no emoji) */}
           <symbol id="g_infantry" viewBox="-10 -10 20 20">
             <path d="M0 -6 L4 -2 L4 6 L-4 6 L-4 -2 Z" fill="currentColor" />
@@ -400,6 +470,64 @@ export function WorldMap({
               );
             })}
           </g>
+
+          {/* ClipPaths per country (used by hypsometric + provinces) */}
+          <defs>
+            {features?.map((f) => {
+              const id = String(Number(f.id));
+              const d = path(f) ?? "";
+              return (
+                <clipPath key={`cc-${id}`} id={`cc-${id}`}>
+                  <path d={d} />
+                </clipPath>
+              );
+            })}
+          </defs>
+
+          {/* Hypsometric elevation overlay, clipped to each country */}
+          {showHypsometric && features?.map((f) => {
+            const id = String(Number(f.id));
+            const b = countryBounds.get(id);
+            if (!b) return null;
+            const [[minX, minY], [maxX, maxY]] = b;
+            return (
+              <g key={`hy-${id}`} clipPath={`url(#cc-${id})`} pointerEvents="none" opacity={0.42} style={{ mixBlendMode: "overlay" }}>
+                <rect x={minX} y={minY} width={maxX - minX} height={maxY - minY} fill="#888" filter="url(#hypsoFill)" />
+              </g>
+            );
+          })}
+
+          {/* Province cells — only visible when zoomed in */}
+          {showProvinces && view.k >= 2.5 && features?.map((f) => {
+            const id = String(Number(f.id));
+            const provs = provincesByCountry.get(id);
+            if (!provs || provs.length <= 1) return null;
+            return (
+              <g key={`pv-${id}`} clipPath={`url(#cc-${id})`}>
+                {provs.map((p) => {
+                  const isSel = selectedProvinceId === p.id;
+                  return (
+                    <path
+                      key={p.id}
+                      d={p.d}
+                      fill={isSel ? "rgba(251,191,36,0.18)" : "transparent"}
+                      stroke={isSel ? "#fbbf24" : "rgba(8,12,20,0.55)"}
+                      strokeWidth={(isSel ? 1.4 : 0.6) / view.k}
+                      strokeDasharray={isSel ? undefined : `${1.6 / view.k} ${1.2 / view.k}`}
+                      style={{ cursor: onProvinceClick ? "pointer" : "inherit" }}
+                      onClick={(e) => {
+                        if (movedRef.current) return;
+                        e.stopPropagation();
+                        onProvinceClick?.(id, p);
+                      }}
+                    />
+                  );
+                })}
+              </g>
+            );
+          })}
+
+
           {showLabels && features?.map((f) => {
             const id = String(Number(f.id));
             const c = path.centroid(f);

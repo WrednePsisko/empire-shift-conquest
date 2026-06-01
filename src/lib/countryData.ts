@@ -16,10 +16,30 @@ export const COUNTRY_GDP: Record<string, number> = {
   "434": 0.04,
 };
 
-// ISO numeric codes of regions players cannot play / are filtered from the world.
+// Population in millions (approx). Fallback derived from GDP.
+export const COUNTRY_POPULATION: Record<string, number> = {
+  "156": 1411, "356": 1428, "840": 335, "360": 277, "586": 241,
+  "76": 215, "566": 224, "50": 173, "643": 144, "484": 129,
+  "392": 125, "608": 117, "231": 126, "818": 109, "180": 102,
+  "276": 84, "364": 88, "792": 85, "704": 100, "120": 28,
+  "504": 37, "404": 55, "834": 65, "508": 32, "826": 67,
+  "250": 68, "380": 59, "724": 48, "616": 38, "642": 19,
+  "203": 10.5, "528": 17.5, "752": 10.4, "578": 5.5, "246": 5.5,
+  "56": 11.7, "40": 9.0, "756": 8.8, "300": 10.4, "620": 10.4,
+  "703": 5.5, "348": 9.7, "705": 2.1, "440": 2.8, "428": 1.9,
+  "233": 1.3, "124": 40, "554": 5.2, "36": 26.5, "32": 46,
+  "152": 19.6, "604": 33, "170": 52, "862": 28, "68": 12,
+  "218": 18, "682": 32, "788": 12, "434": 6.9, "12": 45,
+  "729": 47, "800": 47, "288": 33, "324": 13.5, "384": 28,
+  "266": 2.4, "710": 60, "894": 20, "716": 15, "454": 21,
+  "204": 13, "562": 26, "646": 13, "116": 17, "418": 7.5,
+  "104": 54, "144": 22, "524": 30, "398": 20, "860": 36, "795": 7.0,
+};
+
+
+
 export const EXCLUDED_COUNTRY_IDS = new Set<string>(["10", "260"]);
 
-// Well-known landlocked countries (ISO numeric). No direct sea access.
 export const LANDLOCKED_COUNTRY_IDS = new Set<string>([
   "4","20","51","40","31","112","64","68","72","854","108","140","148","203",
   "748","231","348","398","417","418","426","438","442","454","466","498","496",
@@ -39,3 +59,10 @@ export function getGdp(id: string | number): number {
   const key = String(Number(id));
   return COUNTRY_GDP[key] ?? 0.05;
 }
+
+/** Returns population in millions. Fallback ~ gdpT * 40. */
+export function getPopulation(id: string | number): number {
+  const key = String(Number(id));
+  return COUNTRY_POPULATION[key] ?? Math.max(0.3, getGdp(id) * 40);
+}
+
