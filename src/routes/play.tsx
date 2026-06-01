@@ -90,6 +90,8 @@ function Play() {
   const income = owned.reduce((sum, c) => sum + c.gdpT * INCOME_PER_GDP_T, 0);
   const totalArmies = owned.reduce((s, c) => s + unitTotal(c.units), 0);
   const totalGdp = owned.reduce((s, c) => s + c.gdpT, 0);
+  const totalPop = owned.reduce((s, c) => s + (c.population ?? 0), 0);
+
 
   const selected = selectedId ? countries[selectedId] : null;
   const target = targetId ? countries[targetId] : null;
