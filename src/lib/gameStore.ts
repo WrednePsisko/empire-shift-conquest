@@ -603,7 +603,7 @@ export const useGame = create<GameState>()(
       },
     }),
     {
-      name: "empire-shift-save-v6",
+      name: "empire-shift-save-v7",
       partialize: (s) => ({
         initialized: s.initialized,
         countries: s.countries,
