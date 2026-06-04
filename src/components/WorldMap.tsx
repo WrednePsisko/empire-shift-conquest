@@ -630,9 +630,12 @@ export function WorldMap({
             const a = featuresById.get(mv.fromId);
             const b = featuresById.get(mv.toId);
             if (!a || !b) return null;
-            const ca = path.centroid(a);
-            const cb = path.centroid(b);
+            const capA = getCapital(mv.fromId);
+            const capB = getCapital(mv.toId);
+            const ca = (capA ? (projection(capA) as [number, number] | null) : null) ?? path.centroid(a);
+            const cb = (capB ? (projection(capB) as [number, number] | null) : null) ?? path.centroid(b);
             if (!isFinite(ca[0]) || !isFinite(cb[0])) return null;
+
             const t = Math.min(1, Math.max(0, (now - mv.startMs) / mv.durationMs));
             // Arc the path slightly
             const mx = (ca[0] + cb[0]) / 2;
