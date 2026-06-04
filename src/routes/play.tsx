@@ -1,6 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { WorldMap, type MapMarker, type MapMovement, type MapViewTarget } from "@/components/WorldMap";
+import type { Province } from "@/lib/provinces";
+
 import {
   useGame,
   UNIT_STATS,
