@@ -334,36 +334,48 @@ function Play() {
                   </div>
 
               {/* Diplomacy actions on foreign countries */}
-              {!selectionOwned && (
-                <div className="mt-3 border-t border-border pt-2 flex flex-wrap gap-1.5">
-                  {relWithTarget === "neutral" && (
-                    <>
-                      <Button size="sm" variant="destructive" className="h-8" onClick={() => declareWar(selected.ownerId)}>
-                        <Flag className="size-3.5 mr-1" /> Declare War
-                      </Button>
-                      <Button size="sm" variant="outline" className="h-8" onClick={() => proposeAlliance(selected.ownerId)}>
-                        <Handshake className="size-3.5 mr-1" /> Propose Alliance
-                      </Button>
-                    </>
-                  )}
-                  {relWithTarget === "war" && (
-                    <>
-                      <span className="inline-flex items-center text-[11px] text-destructive font-semibold uppercase tracking-wider px-1.5">⚔ At War</span>
-                      <Button size="sm" variant="outline" className="h-8 ml-auto" onClick={() => makePeace(selected.ownerId)}>
-                        <Handshake className="size-3.5 mr-1" /> Sue for Peace
-                      </Button>
-                    </>
-                  )}
-                  {relWithTarget === "ally" && (
-                    <>
-                      <span className="inline-flex items-center text-[11px] text-emerald-400 font-semibold uppercase tracking-wider px-1.5">🤝 Allied</span>
-                      <Button size="sm" variant="outline" className="h-8 ml-auto" onClick={() => breakAlliance(selected.ownerId)}>
-                        Break Alliance
-                      </Button>
-                    </>
-                  )}
-                </div>
-              )}
+              {!selectionOwned && (() => {
+                const op = opinions[playerEmpireId!]?.[selected.ownerId] ?? 0;
+                const allyReady = op >= 30;
+                return (
+                  <div className="mt-3 border-t border-border pt-2 flex flex-wrap gap-1.5">
+                    {relWithTarget === "neutral" && (
+                      <>
+                        <Button size="sm" variant="destructive" className="h-8" onClick={() => declareWar(selected.ownerId)}>
+                          <Flag className="size-3.5 mr-1" /> Declare War
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8"
+                          disabled={!allyReady}
+                          title={allyReady ? "Propose an alliance" : `Need +30 relations (currently ${op})`}
+                          onClick={() => proposeAlliance(selected.ownerId)}
+                        >
+                          <Handshake className="size-3.5 mr-1" /> Propose Alliance {!allyReady && <span className="ml-1 text-[10px] opacity-70">(+30 req)</span>}
+                        </Button>
+                      </>
+                    )}
+                    {relWithTarget === "war" && (
+                      <>
+                        <span className="inline-flex items-center text-[11px] text-destructive font-semibold uppercase tracking-wider px-1.5">⚔ At War</span>
+                        <Button size="sm" variant="outline" className="h-8 ml-auto" onClick={() => makePeace(selected.ownerId)}>
+                          <Handshake className="size-3.5 mr-1" /> Sue for Peace
+                        </Button>
+                      </>
+                    )}
+                    {relWithTarget === "ally" && (
+                      <>
+                        <span className="inline-flex items-center text-[11px] text-emerald-400 font-semibold uppercase tracking-wider px-1.5">🤝 Allied</span>
+                        <Button size="sm" variant="outline" className="h-8 ml-auto" title="Breaking the alliance costs −40 relations" onClick={() => breakAlliance(selected.ownerId)}>
+                          Break Alliance
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+
 
 
 
