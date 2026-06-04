@@ -551,12 +551,16 @@ export function WorldMap({
               </text>
             );
           })}
-          {/* Static army garrison markers */}
+          {/* Static army garrison markers — placed on the capital city when known,
+              falling back to the country centroid. This fixes France/US/Norway
+              icons drifting into the ocean due to overseas territories. */}
           {markers?.map((m) => {
             const f = featuresById.get(m.id);
             if (!f) return null;
-            const c = path.centroid(f);
+            const cap = getCapital(m.id);
+            const c = cap ? (projection(cap) as [number, number] | null) ?? path.centroid(f) : path.centroid(f);
             if (!isFinite(c[0])) return null;
+
             const r = 7 * labelScale;
             const clickable = m.selectable && !!onMarkerClick;
             return (
