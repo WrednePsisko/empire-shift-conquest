@@ -505,6 +505,31 @@ export const useGame = create<GameState>()(
 
         set({ empires, countries, tick: s.tick + 1, movements: stillMoving });
 
+        // Relation drift — every tick, opinions ease toward a baseline that
+        // depends on current relation. Allies warm, enemies cool, neutrals fade
+        // toward 0. Keeps relations dynamic between actions.
+        {
+          const st = get();
+          const empireIds = Object.keys(st.empires);
+          const op = { ...st.opinions };
+          const rate = 0.5 * Math.max(1, st.speed);
+          for (let i = 0; i < empireIds.length; i++) {
+            for (let j = i + 1; j < empireIds.length; j++) {
+              const a = empireIds[i], b = empireIds[j];
+              const rel = st.relations[a]?.[b] ?? "neutral";
+              const cur = op[a]?.[b] ?? 0;
+              const baseline = rel === "ally" ? 60 : rel === "war" ? -80 : 0;
+              if (cur === baseline) continue;
+              const step = Math.sign(baseline - cur) * Math.min(rate, Math.abs(baseline - cur));
+              const next = Math.max(-100, Math.min(100, cur + step));
+              op[a] = { ...(op[a] ?? {}), [b]: next };
+              op[b] = { ...(op[b] ?? {}), [a]: next };
+            }
+          }
+          set({ opinions: op });
+        }
+
+
         // AI actions — significantly less aggressive, distance + adjacency aware
         const aiRoll = 0.08 * s.speed;
         for (const empire of Object.values(get().empires)) {
