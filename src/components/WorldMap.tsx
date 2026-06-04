@@ -509,6 +509,7 @@ export function WorldMap({
               <g key={`pv-${id}`} clipPath={`url(#cc-${id})`}>
                 {provs.map((p) => {
                   const isSel = selectedProvinceId === p.id;
+                  const popLabel = p.population >= 1000 ? `${(p.population / 1000).toFixed(1)}M` : `${p.population}k`;
                   return (
                     <path
                       key={p.id}
@@ -517,15 +518,21 @@ export function WorldMap({
                       stroke={isSel ? "#fbbf24" : "rgba(8,12,20,0.55)"}
                       strokeWidth={(isSel ? 1.4 : 0.6) / view.k}
                       strokeDasharray={isSel ? undefined : `${1.6 / view.k} ${1.2 / view.k}`}
-                      style={{ cursor: onProvinceClick ? "pointer" : "inherit" }}
+                      style={{ cursor: "pointer" }}
                       onClick={(e) => {
                         if (movedRef.current) return;
                         e.stopPropagation();
+                        // Always bubble the country selection so the panel opens,
+                        // then notify the province handler (if any).
+                        onCountryClick?.({ id, name: f.properties.name, gdpT: getGdp(id), centroid: geoCentroid(f) as [number, number] });
                         onProvinceClick?.(id, p);
                       }}
-                    />
+                    >
+                      <title>{`${p.name} — ${popLabel} pop · $${p.economy.toFixed(1)}B`}</title>
+                    </path>
                   );
                 })}
+
               </g>
             );
           })}
