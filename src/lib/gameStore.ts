@@ -308,22 +308,22 @@ export const useGame = create<GameState>()(
         if (cur === "ally") return { accepted: false, reason: "Already allied." };
         if (cur === "war") return { accepted: false, reason: "End the war first." };
 
-        // Acceptance odds: more stochastic + opinion / power weighted
-        const player = s.empires[playerId];
         const target = s.empires[targetEmpireId];
         if (!target) return { accepted: false, reason: "No such empire." };
-        const playerPower =
-          Object.values(s.countries).filter((c) => c.ownerId === playerId).reduce((a, c) => a + unitPower(c.units) + c.gdpT * 50, 0);
-        const targetPower =
-          Object.values(s.countries).filter((c) => c.ownerId === targetEmpireId).reduce((a, c) => a + unitPower(c.units) + c.gdpT * 50, 0);
-        const ratio = Math.min(2.5, playerPower / Math.max(1, targetPower));
+        const player = s.empires[playerId];
         const opinion = s.opinions[playerId]?.[targetEmpireId] ?? 0;
-        // Base chance, leaves real randomness. Range ~5%..85%.
-        const chance = Math.max(0.05, Math.min(0.85, 0.15 + ratio * 0.15 + opinion / 180 + (Math.random() - 0.5) * 0.15));
+        // HARD REQUIREMENT: relations must be at least +30 to even consider.
+        if (opinion < 30) {
+          get().adjustOpinion(playerId, targetEmpireId, -3);
+          get().pushLog(`✋ ${target.name} refuses — relations too cold (${opinion}/+30 needed).`);
+          return { accepted: false, reason: `Relations must be at least +30 (currently ${opinion}).` };
+        }
+        // Above the floor, higher opinion → higher chance. +30 ≈ 35%, +60 ≈ 70%, +90 ≈ 95%.
+        const chance = Math.max(0.25, Math.min(0.95, (opinion - 20) / 80));
         const accept = Math.random() < chance;
         if (accept) {
           get().setRelation(playerId, targetEmpireId, "ally");
-          get().adjustOpinion(playerId, targetEmpireId, 30);
+          get().adjustOpinion(playerId, targetEmpireId, 20);
           get().pushLog(`🤝 ${target.name} accepted an alliance with ${player.name}.`);
           return { accepted: true, reason: "Alliance signed." };
         }
@@ -335,10 +335,13 @@ export const useGame = create<GameState>()(
       breakAlliance: (targetEmpireId) => {
         const s = get();
         const playerId = s.playerEmpireId!;
+        const wasAlly = pairKey(s, playerId, targetEmpireId) === "ally";
         get().setRelation(playerId, targetEmpireId, "neutral");
-        get().adjustOpinion(playerId, targetEmpireId, -25);
-        get().pushLog(`💔 Alliance with ${s.empires[targetEmpireId]?.name} dissolved.`);
+        // Big hit for betraying an alliance — much harder to re-ally afterwards.
+        get().adjustOpinion(playerId, targetEmpireId, wasAlly ? -40 : -15);
+        get().pushLog(`💔 Alliance with ${s.empires[targetEmpireId]?.name} dissolved — relations plummet.`);
       },
+
 
       declareWar: (targetEmpireId) => {
         const s = get();
