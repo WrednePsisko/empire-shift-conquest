@@ -562,12 +562,14 @@ export const useGame = create<GameState>()(
           // Diplomacy: rare alliance/peace overtures (~10× less frequent than before)
           if (stNow.playerEmpireId && Math.random() < 0.0025) {
             const rel = pairKey(stNow, empire.id, stNow.playerEmpireId);
-            if (rel === "neutral") {
+            const op = stNow.opinions[empire.id]?.[stNow.playerEmpireId] ?? 0;
+            if (rel === "neutral" && op >= 30) {
               queueProposal(set, get, empire.id, "alliance");
             } else if (rel === "war" && Math.random() < 0.4) {
               queueProposal(set, get, empire.id, "peace");
             }
           }
+
 
           // Attack — rarer, must be reachable (land border or both have sea access)
           if (Math.random() < 0.07) {
