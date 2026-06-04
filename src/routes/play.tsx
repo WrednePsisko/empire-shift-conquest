@@ -333,6 +333,22 @@ function Play() {
                     Total power <span className="font-mono text-foreground">{unitPower(selected.units)}</span>
                   </div>
 
+                  {/* Selected province details (set by tapping a province on the map) */}
+                  {selectedProvince && selectedProvince.countryId === selected.id && (
+                    <div className="mt-2 rounded-md border border-primary/40 bg-primary/5 px-2.5 py-1.5 flex items-center gap-2">
+                      <Flag className="size-3.5 text-primary shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] uppercase tracking-widest text-muted-foreground leading-none">Province</div>
+                        <div className="text-sm font-semibold truncate">{selectedProvince.name}</div>
+                      </div>
+                      <div className="text-right text-[10px] leading-tight">
+                        <div>👥 <span className="font-mono">{formatPop(selectedProvince.population)}</span></div>
+                        <div className="text-muted-foreground">💰 <span className="font-mono text-foreground">${selectedProvince.economy.toFixed(1)}B</span></div>
+                      </div>
+                    </div>
+                  )}
+
+
               {/* Diplomacy actions on foreign countries */}
               {!selectionOwned && (() => {
                 const op = opinions[playerEmpireId!]?.[selected.ownerId] ?? 0;
