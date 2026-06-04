@@ -463,9 +463,20 @@ function Play() {
                       </span>
                     </div>
                   </div>
+                  {selectedProvince && selectedProvince.countryId === target.id ? (
+                    <div className="mb-2 rounded-md border border-primary/40 bg-primary/5 px-2 py-1 text-[11px] flex items-center justify-between">
+                      <span>🎯 Front: <span className="font-semibold text-foreground">{selectedProvince.name}</span></span>
+                      <span className="font-mono text-muted-foreground">{formatPop(selectedProvince.population)} · ${selectedProvince.economy.toFixed(1)}B</span>
+                    </div>
+                  ) : target.ownerId !== playerEmpireId ? (
+                    <div className="mb-2 text-[11px] text-muted-foreground italic">
+                      Zoom in and tap a province to choose where troops land.
+                    </div>
+                  ) : null}
                   <div className="text-[11px] text-muted-foreground mb-1">
                     Deploy {Math.round(sendFraction * 100)}% of garrison from {selected.name}
                   </div>
+
                   <input
                     type="range"
                     min={5}
