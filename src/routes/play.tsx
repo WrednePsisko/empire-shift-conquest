@@ -63,6 +63,8 @@ function Play() {
   const [focus, setFocus] = useState<MapViewTarget | null>(null);
   const [panel, setPanel] = useState<"selected" | "diplomacy" | "log" | null>("selected");
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [selectedProvince, setSelectedProvince] = useState<Province | null>(null);
+
 
 
   useEffect(() => {
