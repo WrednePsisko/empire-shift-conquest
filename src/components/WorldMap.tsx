@@ -3,8 +3,9 @@ import { geoNaturalEarth1, geoPath, geoCentroid } from "d3-geo";
 import { feature } from "topojson-client";
 import type { Topology } from "topojson-specification";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { getGdp, getPopulation, isPlayableCountry } from "@/lib/countryData";
+import { getGdp, getPopulation, isPlayableCountry, getCapital } from "@/lib/countryData";
 import { getOrGenerateProvinces, type Province } from "@/lib/provinces";
+
 
 
 export interface MapCountry {
