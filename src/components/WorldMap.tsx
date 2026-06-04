@@ -127,10 +127,12 @@ export function WorldMap({
     }
   }, [features, onCountriesLoaded]);
 
-  const path = useMemo(() => {
-    const projection = geoNaturalEarth1().fitSize([width, height], { type: "Sphere" } as never);
-    return geoPath(projection);
-  }, [width, height]);
+  const projection = useMemo(
+    () => geoNaturalEarth1().fitSize([width, height], { type: "Sphere" } as never),
+    [width, height],
+  );
+  const path = useMemo(() => geoPath(projection), [projection]);
+
 
   const featuresById = useMemo(() => {
     const m = new Map<string, Feature<Geometry, { name: string }>>();
