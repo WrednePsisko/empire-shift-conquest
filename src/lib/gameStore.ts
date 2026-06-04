@@ -308,22 +308,22 @@ export const useGame = create<GameState>()(
         if (cur === "ally") return { accepted: false, reason: "Already allied." };
         if (cur === "war") return { accepted: false, reason: "End the war first." };
 
-        // Acceptance odds: more stochastic + opinion / power weighted
-        const player = s.empires[playerId];
         const target = s.empires[targetEmpireId];
         if (!target) return { accepted: false, reason: "No such empire." };
-        const playerPower =
-          Object.values(s.countries).filter((c) => c.ownerId === playerId).reduce((a, c) => a + unitPower(c.units) + c.gdpT * 50, 0);
-        const targetPower =
-          Object.values(s.countries).filter((c) => c.ownerId === targetEmpireId).reduce((a, c) => a + unitPower(c.units) + c.gdpT * 50, 0);
-        const ratio = Math.min(2.5, playerPower / Math.max(1, targetPower));
+        const player = s.empires[playerId];
         const opinion = s.opinions[playerId]?.[targetEmpireId] ?? 0;
-        // Base chance, leaves real randomness. Range ~5%..85%.
-        const chance = Math.max(0.05, Math.min(0.85, 0.15 + ratio * 0.15 + opinion / 180 + (Math.random() - 0.5) * 0.15));
+        // HARD REQUIREMENT: relations must be at least +30 to even consider.
+        if (opinion < 30) {
+          get().adjustOpinion(playerId, targetEmpireId, -3);
+          get().pushLog(`✋ ${target.name} refuses — relations too cold (${opinion}/+30 needed).`);
+          return { accepted: false, reason: `Relations must be at least +30 (currently ${opinion}).` };
+        }
+        // Above the floor, higher opinion → higher chance. +30 ≈ 35%, +60 ≈ 70%, +90 ≈ 95%.
+        const chance = Math.max(0.25, Math.min(0.95, (opinion - 20) / 80));
         const accept = Math.random() < chance;
         if (accept) {
           get().setRelation(playerId, targetEmpireId, "ally");
-          get().adjustOpinion(playerId, targetEmpireId, 30);
+          get().adjustOpinion(playerId, targetEmpireId, 20);
           get().pushLog(`🤝 ${target.name} accepted an alliance with ${player.name}.`);
           return { accepted: true, reason: "Alliance signed." };
         }
@@ -335,10 +335,13 @@ export const useGame = create<GameState>()(
       breakAlliance: (targetEmpireId) => {
         const s = get();
         const playerId = s.playerEmpireId!;
+        const wasAlly = pairKey(s, playerId, targetEmpireId) === "ally";
         get().setRelation(playerId, targetEmpireId, "neutral");
-        get().adjustOpinion(playerId, targetEmpireId, -25);
-        get().pushLog(`💔 Alliance with ${s.empires[targetEmpireId]?.name} dissolved.`);
+        // Big hit for betraying an alliance — much harder to re-ally afterwards.
+        get().adjustOpinion(playerId, targetEmpireId, wasAlly ? -40 : -15);
+        get().pushLog(`💔 Alliance with ${s.empires[targetEmpireId]?.name} dissolved — relations plummet.`);
       },
+
 
       declareWar: (targetEmpireId) => {
         const s = get();
@@ -502,6 +505,31 @@ export const useGame = create<GameState>()(
 
         set({ empires, countries, tick: s.tick + 1, movements: stillMoving });
 
+        // Relation drift — every tick, opinions ease toward a baseline that
+        // depends on current relation. Allies warm, enemies cool, neutrals fade
+        // toward 0. Keeps relations dynamic between actions.
+        {
+          const st = get();
+          const empireIds = Object.keys(st.empires);
+          const op = { ...st.opinions };
+          const rate = 0.5 * Math.max(1, st.speed);
+          for (let i = 0; i < empireIds.length; i++) {
+            for (let j = i + 1; j < empireIds.length; j++) {
+              const a = empireIds[i], b = empireIds[j];
+              const rel = st.relations[a]?.[b] ?? "neutral";
+              const cur = op[a]?.[b] ?? 0;
+              const baseline = rel === "ally" ? 60 : rel === "war" ? -80 : 0;
+              if (cur === baseline) continue;
+              const step = Math.sign(baseline - cur) * Math.min(rate, Math.abs(baseline - cur));
+              const next = Math.max(-100, Math.min(100, cur + step));
+              op[a] = { ...(op[a] ?? {}), [b]: next };
+              op[b] = { ...(op[b] ?? {}), [a]: next };
+            }
+          }
+          set({ opinions: op });
+        }
+
+
         // AI actions — significantly less aggressive, distance + adjacency aware
         const aiRoll = 0.08 * s.speed;
         for (const empire of Object.values(get().empires)) {
@@ -534,12 +562,14 @@ export const useGame = create<GameState>()(
           // Diplomacy: rare alliance/peace overtures (~10× less frequent than before)
           if (stNow.playerEmpireId && Math.random() < 0.0025) {
             const rel = pairKey(stNow, empire.id, stNow.playerEmpireId);
-            if (rel === "neutral") {
+            const op = stNow.opinions[empire.id]?.[stNow.playerEmpireId] ?? 0;
+            if (rel === "neutral" && op >= 30) {
               queueProposal(set, get, empire.id, "alliance");
             } else if (rel === "war" && Math.random() < 0.4) {
               queueProposal(set, get, empire.id, "peace");
             }
           }
+
 
           // Attack — rarer, must be reachable (land border or both have sea access)
           if (Math.random() < 0.07) {
@@ -573,7 +603,7 @@ export const useGame = create<GameState>()(
       },
     }),
     {
-      name: "empire-shift-save-v6",
+      name: "empire-shift-save-v7",
       partialize: (s) => ({
         initialized: s.initialized,
         countries: s.countries,

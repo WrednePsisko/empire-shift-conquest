@@ -1,9 +1,11 @@
 import { Delaunay } from "d3-delaunay";
+import { regionNamesFor, preferredProvinceCount } from "./historicalRegions";
 
 export interface Province {
   id: string;
   countryId: string;
   index: number;
+  name: string;
   /** SVG path string for the Voronoi cell (projected pixel space, may extend
    *  outside the country — render with a clipPath set to the country path). */
   d: string;
@@ -14,6 +16,7 @@ export interface Province {
   /** Economy (GDP share) in billions USD. */
   economy: number;
 }
+
 
 function mulberry32(seed: number) {
   let t = seed >>> 0;
@@ -51,14 +54,15 @@ export interface ProvinceGenInput {
 export function generateProvinces(input: ProvinceGenInput): Province[] {
   const { countryId, bbox, pixelArea, totalPopulation, totalEconomy } = input;
   const rng = mulberry32(hashSeed(countryId));
-  const n = provinceCountFor(pixelArea);
+  const fallbackN = provinceCountFor(pixelArea);
+  const n = preferredProvinceCount(countryId, fallbackN);
+  const names = regionNamesFor(countryId, n);
 
   const w = Math.max(1, bbox.maxX - bbox.minX);
   const h = Math.max(1, bbox.maxY - bbox.minY);
   const cx0 = (bbox.minX + bbox.maxX) / 2;
   const cy0 = (bbox.minY + bbox.maxY) / 2;
 
-  // Generate jittered grid points for stable cell sizes
   const cols = Math.max(1, Math.round(Math.sqrt(n * (w / h))));
   const rows = Math.max(1, Math.ceil(n / cols));
   const pts: [number, number][] = [];
@@ -99,6 +103,7 @@ export function generateProvinces(input: ProvinceGenInput): Province[] {
         id: `${countryId}_${r.i}`,
         countryId,
         index: r.i,
+        name: names[r.i] ?? `Region ${r.i + 1}`,
         d: r.d,
         cx: r.p[0],
         cy: r.p[1],
@@ -107,6 +112,7 @@ export function generateProvinces(input: ProvinceGenInput): Province[] {
       };
     });
 }
+
 
 const PROVINCE_CACHE = new Map<string, Province[]>();
 

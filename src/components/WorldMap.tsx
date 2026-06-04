@@ -3,8 +3,9 @@ import { geoNaturalEarth1, geoPath, geoCentroid } from "d3-geo";
 import { feature } from "topojson-client";
 import type { Topology } from "topojson-specification";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-import { getGdp, getPopulation, isPlayableCountry } from "@/lib/countryData";
+import { getGdp, getPopulation, isPlayableCountry, getCapital } from "@/lib/countryData";
 import { getOrGenerateProvinces, type Province } from "@/lib/provinces";
+
 
 
 export interface MapCountry {
@@ -126,10 +127,12 @@ export function WorldMap({
     }
   }, [features, onCountriesLoaded]);
 
-  const path = useMemo(() => {
-    const projection = geoNaturalEarth1().fitSize([width, height], { type: "Sphere" } as never);
-    return geoPath(projection);
-  }, [width, height]);
+  const projection = useMemo(
+    () => geoNaturalEarth1().fitSize([width, height], { type: "Sphere" } as never),
+    [width, height],
+  );
+  const path = useMemo(() => geoPath(projection), [projection]);
+
 
   const featuresById = useMemo(() => {
     const m = new Map<string, Feature<Geometry, { name: string }>>();
@@ -506,6 +509,7 @@ export function WorldMap({
               <g key={`pv-${id}`} clipPath={`url(#cc-${id})`}>
                 {provs.map((p) => {
                   const isSel = selectedProvinceId === p.id;
+                  const popLabel = p.population >= 1000 ? `${(p.population / 1000).toFixed(1)}M` : `${p.population}k`;
                   return (
                     <path
                       key={p.id}
@@ -514,15 +518,21 @@ export function WorldMap({
                       stroke={isSel ? "#fbbf24" : "rgba(8,12,20,0.55)"}
                       strokeWidth={(isSel ? 1.4 : 0.6) / view.k}
                       strokeDasharray={isSel ? undefined : `${1.6 / view.k} ${1.2 / view.k}`}
-                      style={{ cursor: onProvinceClick ? "pointer" : "inherit" }}
+                      style={{ cursor: "pointer" }}
                       onClick={(e) => {
                         if (movedRef.current) return;
                         e.stopPropagation();
+                        // Always bubble the country selection so the panel opens,
+                        // then notify the province handler (if any).
+                        onCountryClick?.({ id, name: f.properties.name, gdpT: getGdp(id), centroid: geoCentroid(f) as [number, number] });
                         onProvinceClick?.(id, p);
                       }}
-                    />
+                    >
+                      <title>{`${p.name} — ${popLabel} pop · $${p.economy.toFixed(1)}B`}</title>
+                    </path>
                   );
                 })}
+
               </g>
             );
           })}
@@ -548,12 +558,16 @@ export function WorldMap({
               </text>
             );
           })}
-          {/* Static army garrison markers */}
+          {/* Static army garrison markers — placed on the capital city when known,
+              falling back to the country centroid. This fixes France/US/Norway
+              icons drifting into the ocean due to overseas territories. */}
           {markers?.map((m) => {
             const f = featuresById.get(m.id);
             if (!f) return null;
-            const c = path.centroid(f);
+            const cap = getCapital(m.id);
+            const c = cap ? (projection(cap) as [number, number] | null) ?? path.centroid(f) : path.centroid(f);
             if (!isFinite(c[0])) return null;
+
             const r = 7 * labelScale;
             const clickable = m.selectable && !!onMarkerClick;
             return (
@@ -623,9 +637,12 @@ export function WorldMap({
             const a = featuresById.get(mv.fromId);
             const b = featuresById.get(mv.toId);
             if (!a || !b) return null;
-            const ca = path.centroid(a);
-            const cb = path.centroid(b);
+            const capA = getCapital(mv.fromId);
+            const capB = getCapital(mv.toId);
+            const ca = (capA ? (projection(capA) as [number, number] | null) : null) ?? path.centroid(a);
+            const cb = (capB ? (projection(capB) as [number, number] | null) : null) ?? path.centroid(b);
             if (!isFinite(ca[0]) || !isFinite(cb[0])) return null;
+
             const t = Math.min(1, Math.max(0, (now - mv.startMs) / mv.durationMs));
             // Arc the path slightly
             const mx = (ca[0] + cb[0]) / 2;

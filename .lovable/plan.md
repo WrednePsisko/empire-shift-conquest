@@ -1,64 +1,63 @@
-# Plan: Provinces, Hypsometric Map, War Flow
+# Plan: Deeper War, Alliances, and Provinces
 
-This is a large change. I'll break it into 4 focused areas. Confirm before I build so we don't waste a long pass on the wrong direction.
+This is a large pass touching map rendering, gameplay state, and UI. I'll group the work so we can ship it cleanly.
 
-## 1. Hypsometric (elevation) overlay
+## 1. Send Troops flow (province targeting)
 
-Render an elevation-tinted layer on top of the political fills, not just contour lines.
+- After declaring war, clicking an enemy country opens a **target panel** instead of immediately attacking.
+- Panel lists that country's provinces with name + population + economy + current garrison.
+- Pick a province → set troop count via input field + slider + quick buttons (25%, 50%, 100%, Max).
+- "Send Troops" dispatches a movement whose destination is the **province centroid** (not country centroid). Existing army-speed-by-size logic kept.
+- On arrival: combat resolves against that province's garrison; if won, only that province flips ownership. Country falls only when all its provinces are owned.
 
-- Procedural hypsometry generated from an SVG `<feTurbulence>` + `<feColorMatrix>` stack (lowlands green → highlands brown → peaks white), clipped to each country's path.
-- Blended at ~35% opacity so political colors remain readable.
-- Pure SVG, no extra dependencies, no extra data fetch.
+Province ownership lives in a new `provinceOwners: Record<string, string>` map in the store, keyed by `province.id`. Country-level `owners` is derived ("country is conquered when every province owner === attacker").
 
-Trade-off vs. real DEM: a true world elevation raster is ~5–20 MB and slow on mobile. Procedural gives the look at zero bandwidth cost. If you want real data later we can swap in a tiled raster.
+## 2. Alliance friction + relation drift
 
-## 2. Provinces system
+- **Forming an alliance** now requires relations ≥ +30 (was: instant accept by AI in many cases).
+- **Breaking an alliance** applies a one-shot −40 to both sides + a 60s "betrayed" tag that blocks new alliance offers from that pair.
+- **Drift over time**: every game tick, each relation moves toward a baseline derived from (geography, ideology proxy, shared enemies). Rate ≈ ±0.5 per real-time second, capped at [−100, +100]. Allies drift toward +60, enemies in active war drift toward −80.
+- AI proposal logic checks the +30 threshold before sending alliance offers, so fewer noise offers reach the player.
 
-This is the biggest change.
+## 3. Historical-region provinces (not random Voronoi)
 
-**Generation (deterministic, client-side):**
-- Province count per country = `clamp(round(sqrt(area_km2) / k), 1, 40)` — large countries (Russia, US, Canada) get up to ~40; small ones get 1–3.
-- Provinces generated via a seeded Voronoi (`d3-delaunay`) over points sampled inside each country polygon, clipped to the country shape.
-- Sparse-area weighting: sampling density is biased by a simple population-density proxy (latitude band + distance from country centroid), so empty regions produce fewer, larger provinces.
+- Replace the seeded Voronoi in `src/lib/provinces.ts` with a curated table of **historical regions per country** (e.g. France: Île-de-France, Bretagne, Normandie, Occitanie, …; Germany: Bayern, NRW, Baden-Württemberg, …; US: Northeast, Midwest, South, West, Pacific, Alaska; etc.).
+- For each country we store a name list + a per-region population/economy weight. Cell shapes are still generated geometrically (the world map TopoJSON doesn't ship admin-1 polygons), but the **count, names, and weights match real subdivisions** instead of `sqrt(area)/k`.
+- Countries without curated data fall back to a small generic split (1–4 regions named "North / South / East / West / Central").
+- Province IDs become stable strings like `FRA_ile_de_france`, so saves survive code edits to other countries.
 
-**Per-province data:**
-- `population` — distributed from total country population using the same density proxy, then jittered with a seeded RNG.
-- `economy` (GDP share) — distributed proportionally to population with a wealth multiplier per country.
-- `ownerId`, `garrison` (army units stationed there).
+## 4. Capital city + main military icon
 
-**Rendering:**
-- Province borders drawn as thin lines inside each country.
-- At low zoom, only country borders show; province borders fade in past ~3×.
-- Tap a province to select it (replaces today's tap-country behavior when zoomed in).
+- Add a `capital: [lon, lat]` field to a `CAPITALS` map in `countryData.ts` for every playable country (using well-known coordinates).
+- The **main army icon** for each country is rendered at the projected capital point, not the country centroid. Reinforcements spawn there.
+- Capital is marked with a small star/dot under the icon and shown in the country info panel.
 
-## 3. War declaration & troop targeting flow
+## 5. Bug fixes
 
-New interaction model:
-
-1. Tap a country you don't own → side panel shows country info + **Declare War** button (only if not already at war / not allied).
-2. After declaring war, the country's provinces become tappable as attack targets.
-3. Tap one of your army icons → tap an enemy province → troops route to that specific province (current code routes to country centroid; this changes to province centroid).
-4. Conquering all provinces = conquering the country.
-
-Opinion / AI hooks stay as-is, just keyed on province ownership rolled up to country.
-
-## 4. Country population counter + map pan fix
-
-- Add `population` to each country (seeded from real-world figures in `countryData.ts`), shown in the country info panel and rolled up from provinces once conquests start splitting countries.
-- Map pan: the right-side zoom control column currently uses `pointer-events-auto` on the inner div but the outer wrapper is `pointer-events-none` with `z-10` covering map area. I'll shrink the wrapper to exactly the button column width so the rest of the right edge is fully pannable, and verify on the 742px viewport.
+- **Multi-province country not selectable**: today, when zoomed in, province click handlers swallow the event and the country selection state never updates. Fix: clicking a province sets *both* `selectedCountryId` (its owner) and `selectedProvinceId`. The country info panel opens as before.
+- **France has no icon**: France's ISO numeric is `250`; the icon lookup is keyed off centroid placement that currently falls in the Atlantic because of the overseas-territory bounding box. Fix: project the icon from the new `capital` field (Paris) instead of the geometric centroid. This also fixes US (which today renders mid-Pacific because of Hawaii/Alaska) and Norway.
+- **Province economy not visible**: province popover/panel currently shows only name. Add population (formatted with `formatPop`) and economy (formatted as `$X.XB` / `$X.XM`) plus current garrison.
 
 ## Technical notes
 
-- New deps: `d3-delaunay` (~15 kB) for Voronoi.
-- New file: `src/lib/provinces.ts` — generation + lookup, memoized per country.
-- Save schema bumps to `empire-shift-save-v5`; old saves discarded.
-- `WorldMap.tsx` gets a new `provinces` prop and an `onProvinceClick` callback; country fill logic moves to province fill when zoomed in.
-- Movements retarget from country centroid to province centroid.
+- New file: `src/lib/historicalRegions.ts` (curated table, ~30 countries with real subdivisions; everything else uses fallback).
+- `src/lib/provinces.ts` keeps Voronoi geometry but driven by curated point counts and named cells.
+- `src/lib/gameStore.ts` gets:
+  - `provinceOwners`, `provinceGarrisons`
+  - `relations` drift inside the existing tick loop
+  - `declareAlliance`, `breakAlliance`, `proposeAlliance` updated for +30 / −40 rules
+  - `sendTroops(originCountryId, targetProvinceId, count)` replacing the old country-targeted `attack`
+- `src/components/WorldMap.tsx`:
+  - capital-based icon positions
+  - province click → bubbles up to country + province selection
+  - province tooltip shows pop / economy / garrison
+- `src/routes/play.tsx`:
+  - new "Target Province" panel with slider + quantity input
+  - alliance buttons disabled with hover text when relations < +30
+- Save schema bumps to `empire-shift-save-v7`; older saves discarded with a one-line toast.
 
-## Scope I'm NOT doing in this pass (call out so we agree)
+## Not in this pass
 
-- Real DEM raster overlay (procedural only).
-- Province-level supply lines / fronts beyond what already exists at country level.
-- Editing real-world province boundaries (e.g. actual US states) — generated Voronoi only. Real admin-1 boundaries would need a ~3 MB GeoJSON download.
-
-Shall I proceed with this approach, or do you want real admin-1 province boundaries (US states, French régions, etc.) instead of generated Voronoi? That's the one decision that significantly changes the implementation.
+- Real admin-1 GeoJSON boundaries (still using clipped Voronoi shapes for cell geometry — only the *names and counts* match history).
+- Full logistics/supply chains beyond the current army-speed-by-size rule.
+- Multi-province simultaneous offensives in one click (you'd queue them one at a time).

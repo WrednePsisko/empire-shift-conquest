@@ -1,6 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { WorldMap, type MapMarker, type MapMovement, type MapViewTarget } from "@/components/WorldMap";
+import type { Province } from "@/lib/provinces";
+
 import {
   useGame,
   UNIT_STATS,
@@ -61,6 +63,8 @@ function Play() {
   const [focus, setFocus] = useState<MapViewTarget | null>(null);
   const [panel, setPanel] = useState<"selected" | "diplomacy" | "log" | null>("selected");
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [selectedProvince, setSelectedProvince] = useState<Province | null>(null);
+
 
 
   useEffect(() => {
@@ -261,12 +265,15 @@ function Play() {
             fillFor={fillFor}
             selectedId={selectedId}
             highlightId={targetId}
+            selectedProvinceId={selectedProvince?.id ?? null}
             markers={markers}
             movements={mapMovements}
             focusOn={focus}
-            onCountryClick={(c) => handleCountryClick(c.id)}
-            onMarkerClick={(id) => handleCountryClick(id)}
+            onCountryClick={(c) => { setSelectedProvince(null); handleCountryClick(c.id); }}
+            onMarkerClick={(id) => { setSelectedProvince(null); handleCountryClick(id); }}
+            onProvinceClick={(countryId, p) => { setSelectedProvince(p); handleCountryClick(countryId); }}
           />
+
 
           {/* Army-selected hint banner */}
           {selectionOwned && !target && unitTotal(selected!.units) > 0 && (
@@ -326,37 +333,65 @@ function Play() {
                     Total power <span className="font-mono text-foreground">{unitPower(selected.units)}</span>
                   </div>
 
+                  {/* Selected province details (set by tapping a province on the map) */}
+                  {selectedProvince && selectedProvince.countryId === selected.id && (
+                    <div className="mt-2 rounded-md border border-primary/40 bg-primary/5 px-2.5 py-1.5 flex items-center gap-2">
+                      <Flag className="size-3.5 text-primary shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] uppercase tracking-widest text-muted-foreground leading-none">Province</div>
+                        <div className="text-sm font-semibold truncate">{selectedProvince.name}</div>
+                      </div>
+                      <div className="text-right text-[10px] leading-tight">
+                        <div>👥 <span className="font-mono">{formatPop(selectedProvince.population)}</span></div>
+                        <div className="text-muted-foreground">💰 <span className="font-mono text-foreground">${selectedProvince.economy.toFixed(1)}B</span></div>
+                      </div>
+                    </div>
+                  )}
+
+
               {/* Diplomacy actions on foreign countries */}
-              {!selectionOwned && (
-                <div className="mt-3 border-t border-border pt-2 flex flex-wrap gap-1.5">
-                  {relWithTarget === "neutral" && (
-                    <>
-                      <Button size="sm" variant="destructive" className="h-8" onClick={() => declareWar(selected.ownerId)}>
-                        <Flag className="size-3.5 mr-1" /> Declare War
-                      </Button>
-                      <Button size="sm" variant="outline" className="h-8" onClick={() => proposeAlliance(selected.ownerId)}>
-                        <Handshake className="size-3.5 mr-1" /> Propose Alliance
-                      </Button>
-                    </>
-                  )}
-                  {relWithTarget === "war" && (
-                    <>
-                      <span className="inline-flex items-center text-[11px] text-destructive font-semibold uppercase tracking-wider px-1.5">⚔ At War</span>
-                      <Button size="sm" variant="outline" className="h-8 ml-auto" onClick={() => makePeace(selected.ownerId)}>
-                        <Handshake className="size-3.5 mr-1" /> Sue for Peace
-                      </Button>
-                    </>
-                  )}
-                  {relWithTarget === "ally" && (
-                    <>
-                      <span className="inline-flex items-center text-[11px] text-emerald-400 font-semibold uppercase tracking-wider px-1.5">🤝 Allied</span>
-                      <Button size="sm" variant="outline" className="h-8 ml-auto" onClick={() => breakAlliance(selected.ownerId)}>
-                        Break Alliance
-                      </Button>
-                    </>
-                  )}
-                </div>
-              )}
+              {!selectionOwned && (() => {
+                const op = opinions[playerEmpireId!]?.[selected.ownerId] ?? 0;
+                const allyReady = op >= 30;
+                return (
+                  <div className="mt-3 border-t border-border pt-2 flex flex-wrap gap-1.5">
+                    {relWithTarget === "neutral" && (
+                      <>
+                        <Button size="sm" variant="destructive" className="h-8" onClick={() => declareWar(selected.ownerId)}>
+                          <Flag className="size-3.5 mr-1" /> Declare War
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8"
+                          disabled={!allyReady}
+                          title={allyReady ? "Propose an alliance" : `Need +30 relations (currently ${op})`}
+                          onClick={() => proposeAlliance(selected.ownerId)}
+                        >
+                          <Handshake className="size-3.5 mr-1" /> Propose Alliance {!allyReady && <span className="ml-1 text-[10px] opacity-70">(+30 req)</span>}
+                        </Button>
+                      </>
+                    )}
+                    {relWithTarget === "war" && (
+                      <>
+                        <span className="inline-flex items-center text-[11px] text-destructive font-semibold uppercase tracking-wider px-1.5">⚔ At War</span>
+                        <Button size="sm" variant="outline" className="h-8 ml-auto" onClick={() => makePeace(selected.ownerId)}>
+                          <Handshake className="size-3.5 mr-1" /> Sue for Peace
+                        </Button>
+                      </>
+                    )}
+                    {relWithTarget === "ally" && (
+                      <>
+                        <span className="inline-flex items-center text-[11px] text-emerald-400 font-semibold uppercase tracking-wider px-1.5">🤝 Allied</span>
+                        <Button size="sm" variant="outline" className="h-8 ml-auto" title="Breaking the alliance costs −40 relations" onClick={() => breakAlliance(selected.ownerId)}>
+                          Break Alliance
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+
 
 
 
@@ -428,9 +463,20 @@ function Play() {
                       </span>
                     </div>
                   </div>
+                  {selectedProvince && selectedProvince.countryId === target.id ? (
+                    <div className="mb-2 rounded-md border border-primary/40 bg-primary/5 px-2 py-1 text-[11px] flex items-center justify-between">
+                      <span>🎯 Front: <span className="font-semibold text-foreground">{selectedProvince.name}</span></span>
+                      <span className="font-mono text-muted-foreground">{formatPop(selectedProvince.population)} · ${selectedProvince.economy.toFixed(1)}B</span>
+                    </div>
+                  ) : target.ownerId !== playerEmpireId ? (
+                    <div className="mb-2 text-[11px] text-muted-foreground italic">
+                      Zoom in and tap a province to choose where troops land.
+                    </div>
+                  ) : null}
                   <div className="text-[11px] text-muted-foreground mb-1">
                     Deploy {Math.round(sendFraction * 100)}% of garrison from {selected.name}
                   </div>
+
                   <input
                     type="range"
                     min={5}
