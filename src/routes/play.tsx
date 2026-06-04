@@ -265,12 +265,15 @@ function Play() {
             fillFor={fillFor}
             selectedId={selectedId}
             highlightId={targetId}
+            selectedProvinceId={selectedProvince?.id ?? null}
             markers={markers}
             movements={mapMovements}
             focusOn={focus}
-            onCountryClick={(c) => handleCountryClick(c.id)}
-            onMarkerClick={(id) => handleCountryClick(id)}
+            onCountryClick={(c) => { setSelectedProvince(null); handleCountryClick(c.id); }}
+            onMarkerClick={(id) => { setSelectedProvince(null); handleCountryClick(id); }}
+            onProvinceClick={(countryId, p) => { setSelectedProvince(p); handleCountryClick(countryId); }}
           />
+
 
           {/* Army-selected hint banner */}
           {selectionOwned && !target && unitTotal(selected!.units) > 0 && (
