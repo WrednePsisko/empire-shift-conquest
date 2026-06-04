@@ -1,9 +1,11 @@
 import { Delaunay } from "d3-delaunay";
+import { regionNamesFor, preferredProvinceCount } from "./historicalRegions";
 
 export interface Province {
   id: string;
   countryId: string;
   index: number;
+  name: string;
   /** SVG path string for the Voronoi cell (projected pixel space, may extend
    *  outside the country — render with a clipPath set to the country path). */
   d: string;
@@ -14,6 +16,7 @@ export interface Province {
   /** Economy (GDP share) in billions USD. */
   economy: number;
 }
+
 
 function mulberry32(seed: number) {
   let t = seed >>> 0;
