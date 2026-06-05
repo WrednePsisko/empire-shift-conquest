@@ -68,8 +68,8 @@ export function generateProvinces(input: ProvinceGenInput): Province[] {
   const pts: [number, number][] = [];
   for (let r = 0; r < rows && pts.length < n; r++) {
     for (let c = 0; c < cols && pts.length < n; c++) {
-      const jx = (rng() - 0.5) * (w / cols) * 0.6;
-      const jy = (rng() - 0.5) * (h / rows) * 0.6;
+      const jx = (rng() - 0.5) * (w / cols) * 0.9;
+      const jy = (rng() - 0.5) * (h / rows) * 0.9;
       pts.push([
         bbox.minX + ((c + 0.5) * w) / cols + jx,
         bbox.minY + ((r + 0.5) * h) / rows + jy,
@@ -80,10 +80,30 @@ export function generateProvinces(input: ProvinceGenInput): Province[] {
 
   const padX = w * 0.15 + 4;
   const padY = h * 0.15 + 4;
-  const delaunay = Delaunay.from(pts);
-  const voronoi = delaunay.voronoi([
+  const clipBox: [number, number, number, number] = [
     bbox.minX - padX, bbox.minY - padY, bbox.maxX + padX, bbox.maxY + padY,
-  ]);
+  ];
+  // Lloyd relaxation — softens grid artefacts into organic, irregular cells
+  let delaunay = Delaunay.from(pts);
+  let voronoi = delaunay.voronoi(clipBox);
+  for (let iter = 0; iter < 2; iter++) {
+    for (let i = 0; i < pts.length; i++) {
+      const cell = voronoi.cellPolygon(i);
+      if (!cell || cell.length < 3) continue;
+      let cx = 0, cy = 0, area = 0;
+      for (let j = 0; j < cell.length - 1; j++) {
+        const [x0, y0] = cell[j]; const [x1, y1] = cell[j + 1];
+        const a = x0 * y1 - x1 * y0;
+        area += a; cx += (x0 + x1) * a; cy += (y0 + y1) * a;
+      }
+      if (Math.abs(area) < 1e-6) continue;
+      area *= 0.5;
+      pts[i] = [cx / (6 * area), cy / (6 * area)];
+    }
+    delaunay = Delaunay.from(pts);
+    voronoi = delaunay.voronoi(clipBox);
+  }
+
 
   const span = Math.hypot(w, h);
   const raw = pts.map((p, i) => {
