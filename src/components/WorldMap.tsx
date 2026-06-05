@@ -501,6 +501,57 @@ export function WorldMap({
             );
           })}
 
+          {/* Hydrographic overlay: lakes + major rivers (lon/lat projected) */}
+          <g pointerEvents="none">
+            {MAJOR_LAKES.map((lk) => {
+              const pts = lk.ring
+                .map((c) => projection(c) as [number, number] | null)
+                .filter((p): p is [number, number] => !!p && isFinite(p[0]));
+              if (pts.length < 3) return null;
+              const d = "M" + pts.map((p) => `${p[0]},${p[1]}`).join("L") + "Z";
+              return (
+                <path
+                  key={`lk-${lk.name}`}
+                  d={d}
+                  fill="#1d4d7a"
+                  fillOpacity={0.78}
+                  stroke="#7fb3dd"
+                  strokeOpacity={0.55}
+                  strokeWidth={0.4 / view.k}
+                >
+                  <title>{lk.name}</title>
+                </path>
+              );
+            })}
+            {MAJOR_RIVERS.map((rv) => {
+              const pts = rv.path
+                .map((c) => projection(c) as [number, number] | null)
+                .filter((p): p is [number, number] => !!p && isFinite(p[0]));
+              if (pts.length < 2) return null;
+              // Smooth quadratic curve through points for an organic look
+              let d = `M${pts[0][0]},${pts[0][1]}`;
+              for (let i = 1; i < pts.length - 1; i++) {
+                const mx = (pts[i][0] + pts[i + 1][0]) / 2;
+                const my = (pts[i][1] + pts[i + 1][1]) / 2;
+                d += ` Q${pts[i][0]},${pts[i][1]} ${mx},${my}`;
+              }
+              d += ` T${pts[pts.length - 1][0]},${pts[pts.length - 1][1]}`;
+              const w = (rv.width ?? 0.7) / view.k;
+              return (
+                <g key={`rv-${rv.name}`}>
+                  {/* soft halo */}
+                  <path d={d} fill="none" stroke="#6fb0e0" strokeOpacity={0.18}
+                    strokeWidth={w * 3} strokeLinecap="round" strokeLinejoin="round" />
+                  <path d={d} fill="none" stroke="#3a82c4" strokeOpacity={0.95}
+                    strokeWidth={w} strokeLinecap="round" strokeLinejoin="round">
+                    <title>{rv.name}</title>
+                  </path>
+                </g>
+              );
+            })}
+          </g>
+
+
           {/* Province cells — only visible when zoomed in */}
           {showProvinces && view.k >= 2.5 && features?.map((f) => {
             const id = String(Number(f.id));
