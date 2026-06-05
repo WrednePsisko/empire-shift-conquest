@@ -5,6 +5,7 @@ import type { Topology } from "topojson-specification";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 import { getGdp, getPopulation, isPlayableCountry, getCapital } from "@/lib/countryData";
 import { getOrGenerateProvinces, type Province } from "@/lib/provinces";
+import { MAJOR_RIVERS, MAJOR_LAKES } from "@/lib/hydrography";
 
 
 
