@@ -121,6 +121,10 @@ export const HISTORICAL_REGIONS: Record<string, string[]> = {
   "246": ["Uusimaa", "Lappi", "Pohjanmaa", "Pirkanmaa", "Varsinais-Suomi"],
   // Denmark
   "208": ["Hovedstaden", "Sjælland", "Syddanmark", "Midtjylland", "Nordjylland"],
+  // Somalia (includes the self-declared region of Somaliland and Puntland)
+  "706": ["Banaadir", "Jubaland", "South West", "Galmudug", "Hirshabeelle", "Puntland", "Somaliland"],
+  // Serbia (includes Kosovo and Vojvodina as historic regions)
+  "688": ["Belgrade", "Šumadija", "Vojvodina", "Southern Serbia", "Eastern Serbia", "Kosovo"],
 };
 
 const GENERIC_FALLBACK = ["Central", "North", "South", "East", "West", "Coast", "Highland"];

@@ -86,7 +86,7 @@ export function generateProvinces(input: ProvinceGenInput): Province[] {
   // Lloyd relaxation — softens grid artefacts into organic, irregular cells
   let delaunay = Delaunay.from(pts);
   let voronoi = delaunay.voronoi(clipBox);
-  for (let iter = 0; iter < 2; iter++) {
+  for (let iter = 0; iter < 4; iter++) {
     for (let i = 0; i < pts.length; i++) {
       const cell = voronoi.cellPolygon(i);
       if (!cell || cell.length < 3) continue;
@@ -98,16 +98,55 @@ export function generateProvinces(input: ProvinceGenInput): Province[] {
       }
       if (Math.abs(area) < 1e-6) continue;
       area *= 0.5;
-      pts[i] = [cx / (6 * area), cy / (6 * area)];
+      // Move 70% toward centroid each pass (relaxed Lloyd) for less grid feel
+      const tx = cx / (6 * area), ty = cy / (6 * area);
+      pts[i] = [pts[i][0] + (tx - pts[i][0]) * 0.7, pts[i][1] + (ty - pts[i][1]) * 0.7];
     }
     delaunay = Delaunay.from(pts);
     voronoi = delaunay.voronoi(clipBox);
   }
 
+  // Build organic, wiggly cell paths by subdividing each Voronoi edge and
+  // perturbing midpoints with deterministic noise. Shared edges between
+  // neighbours use the SAME perturbation (keyed by sorted endpoints) so cells
+  // stay watertight — no gaps between provinces.
+  const edgeNoise = new Map<string, number>();
+  const noiseFor = (a: [number, number], b: [number, number]): number => {
+    const k = a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])
+      ? `${a[0].toFixed(2)},${a[1].toFixed(2)}|${b[0].toFixed(2)},${b[1].toFixed(2)}`
+      : `${b[0].toFixed(2)},${b[1].toFixed(2)}|${a[0].toFixed(2)},${a[1].toFixed(2)}`;
+    let v = edgeNoise.get(k);
+    if (v === undefined) { v = (rng() - 0.5) * 2; edgeNoise.set(k, v); }
+    return v;
+  };
+  const wiggleAmp = Math.min(w, h) * 0.012;
+
+  const cellPaths: string[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    const cell = voronoi.cellPolygon(i);
+    if (!cell || cell.length < 3) { cellPaths[i] = ""; continue; }
+    const out: [number, number][] = [];
+    for (let j = 0; j < cell.length - 1; j++) {
+      const a = cell[j] as [number, number];
+      const b = cell[j + 1] as [number, number];
+      out.push(a);
+      // two perturbed midpoints per edge → soft S-curve borders
+      const dx = b[0] - a[0], dy = b[1] - a[1];
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len;
+      for (const t of [0.33, 0.66]) {
+        const px = a[0] + dx * t;
+        const py = a[1] + dy * t;
+        const off = noiseFor(a, b) * wiggleAmp * (1 - Math.abs(t - 0.5) * 1.2);
+        out.push([px + nx * off, py + ny * off]);
+      }
+    }
+    cellPaths[i] = "M" + out.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join("L") + "Z";
+  }
 
   const span = Math.hypot(w, h);
   const raw = pts.map((p, i) => {
-    const d = voronoi.renderCell(i) ?? "";
+    const d = cellPaths[i] ?? "";
     const dist = Math.hypot(p[0] - cx0, p[1] - cy0);
     const centralBias = 1 - Math.min(1, dist / (span * 0.55));
     const density = 0.25 + centralBias * 0.6 + rng() * 0.4;

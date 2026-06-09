@@ -88,11 +88,9 @@ export const MAJOR_RIVERS: River[] = [
 ];
 
 export const MAJOR_LAKES: Lake[] = [
-  // Crude polygons (closed rings)
-  { name: "Caspian Sea", ring: [
-    [47,47],[49,46],[51,44],[52,42],[53,40],[51,38],[49,37],[48,38.5],[47.5,41],[47,44],
-  ]},
-  { name: "Aral", ring: [[58,46],[60,46.5],[61,45],[60,44.2],[58.5,44.5]] },
+  // Crude polygons (closed rings). NOTE: Caspian and Aral are already drawn as
+  // sea by the base world TopoJSON (they're not "land"), so we don't overlay
+  // them here — doing so produced an ugly blue stain.
   { name: "Baikal", ring: [[103.7,51.5],[105.5,52.5],[108,54],[109.5,55.5],[108,55.8],[105,54.2],[103.5,52.2]] },
   { name: "Balkhash", ring: [[73,46.5],[75,46.8],[77,46.5],[78,45.5],[76,45.2],[73.5,45.8]] },
   { name: "Victoria", ring: [[31.6,-3],[33,-2],[34,-0.5],[34,1],[32.5,0.5],[31.7,-1.5]] },
